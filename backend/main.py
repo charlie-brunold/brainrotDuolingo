@@ -50,8 +50,8 @@ except ImportError:
 
 # Load API keys
 load_dotenv()
-YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY') or 'AIzaSyCq_t-V6P38IQBVK2v0Wk4SdoU5l2Ch15o'
-GROQ_API_KEY = os.getenv('GROQ_API_KEY') or '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'
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY') 
+GROQ_API_KEY = os.getenv('GROQ_API_KEY') 
 
 if not YOUTUBE_API_KEY:
     raise ValueError("YOUTUBE_API_KEY missing")
@@ -210,7 +210,6 @@ def get_videos():
     return shorts_data
 # ...
 
-@app.get("/api/videos")
 @app.post("/api/videos")  # Support both GET and POST
 def get_videos():
     """Get cached videos or fetch new ones"""
