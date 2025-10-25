@@ -81,10 +81,9 @@ export default function BrainrotTikTok({ shortsData }) {
   // --- Scroll/Swipe Handlers (FIXED/IMPROVED) ---
   
   const handleWheel = (e) => {
-    // 1. If comments are open, close them on the first scroll event.
+    // Prevent scrolling if comments are open
     if (showComments) {
-        setShowComments(false);
-        return; // Prevents accidental video skip on closing gesture
+        return; // Do nothing while comments are open
     } 
 
     // 2. Switch video based on wheel direction
@@ -425,44 +424,63 @@ export default function BrainrotTikTok({ shortsData }) {
   }
 
   return (
-    <div className="h-screen w-full bg-black relative"> {/* Removed overflow-y-auto */}
+    <div className="h-screen w-full bg-black relative overflow-hidden">
       <div
         ref={containerRef}
         onWheel={handleWheel}
         onTouchStart={handleTouchStart} // ADDED
         onTouchMove={handleTouchMove}   // ADDED
         onTouchEnd={handleTouchEnd}     // ADDED
-        className="h-full w-full relative"
+        className="relative transition-transform duration-500 ease-out"
+        style={{ 
+          transform: `translateY(-${currentVideoIndex * 100}vh)`,
+          height: `${VIDEOS.length * 100}vh`
+        }}
       >
-        {/* Video Container with REAL YouTube Video */}
-        <div className="h-full w-full flex items-center justify-center bg-black">
-          {videoId ? (
-            <iframe
-              width="100%"
-              height="100%"
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=0&controls=1&rel=0&modestbranding=1`}
-              title={currentVideo.title}
-              frameBorder="0"
-              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="absolute inset-0"
-              style={{ objectFit: 'cover' }}
-            />
-          ) : (
-            <div className="text-center text-white p-8">
-              <img 
-                src={currentVideo.thumbnail} 
-                alt={currentVideo.title}
-                className="max-w-full max-h-full rounded-lg mb-4"
-              />
-              <div className="text-2xl font-bold mb-2">{currentVideo.title}</div>
-              <div className="text-lg opacity-80">@{currentVideo.channel}</div>
+        {/* Render all videos stacked vertically */}
+        {VIDEOS.map((video, index) => {
+          const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
+          
+          return (
+            <div key={index} className="h-screen w-full flex items-center justify-center bg-black relative">
+              {videoIdForIndex ? (
+                <iframe
+                  width="100%"
+                  height="100%"
+                  src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=0&controls=1&rel=0&modestbranding=1`}
+                  title={video.title}
+                  frameBorder="0"
+                  allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="absolute inset-0"
+                  style={{ objectFit: 'cover' }}
+                />
+              ) : (
+                <div className="text-center text-white p-8">
+                  <img 
+                    src={video.thumbnail} 
+                    alt={video.title}
+                    className="max-w-full max-h-full rounded-lg mb-4"
+                  />
+                  <div className="text-2xl font-bold mb-2">{video.title}</div>
+                  <div className="text-lg opacity-80">@{video.channel}</div>
+                </div>
+              )}
             </div>
-          )}
+          );
+        })}
+      </div>
+
+      {/* Overlay UI for current video */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="h-full w-full relative pointer-events-auto"
+             style={{ pointerEvents: 'none' }}>
+        {/* Video Container with REAL YouTube Video - NOW JUST A PLACEHOLDER FOR POSITIONING */}
+        <div className="h-full w-full flex items-center justify-center bg-transparent" style={{ pointerEvents: 'none' }}>
         </div>
 
         {/* Navigation Arrows */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50">
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50" style={{ pointerEvents: 'auto' }}>
         <button
             onClick={() => scrollToVideo(currentVideoIndex - 1)}
             disabled={currentVideoIndex === 0 || showComments}
@@ -479,7 +497,7 @@ export default function BrainrotTikTok({ shortsData }) {
         </button>
         </div>
         {/* Right Sidebar */}
-        <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center z-10">
+        <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center z-10" style={{ pointerEvents: 'auto' }}>
           <div className="flex flex-col items-center gap-1">
             <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
               <Heart className="w-7 h-7 text-white" />
@@ -504,7 +522,7 @@ export default function BrainrotTikTok({ shortsData }) {
         </div>
 
         {/* Bottom Info Bar */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-10">
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-10" style={{ pointerEvents: 'auto' }}>
           <div className="text-white">
             <div className="font-bold">@{currentVideo.channel}</div>
             <div className="text-sm mt-1">{currentVideo.title}</div>
@@ -525,6 +543,7 @@ export default function BrainrotTikTok({ shortsData }) {
           <div 
             className="absolute inset-0 bg-black/50 z-30"
             onClick={() => setShowComments(false)}
+            style={{ pointerEvents: 'auto' }}
           >
             <div 
               className="absolute bottom-0 left-0 right-0 h-2/3 bg-gray-900 rounded-t-3xl flex flex-col"
@@ -842,7 +861,7 @@ export default function BrainrotTikTok({ shortsData }) {
         )}
 
         {/* Top Bar */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-center gap-8 z-10">
+        <div className="absolute top-0 left-0 right-0 p-4 flex justify-center gap-8 z-10" style={{ pointerEvents: 'auto' }}>
           <button
             onClick={() => setShowMySlang(true)}
             className="text-white/70 text-sm font-semibold hover:text-white transition-colors"
@@ -850,6 +869,7 @@ export default function BrainrotTikTok({ shortsData }) {
             My Slang {mySlang.length > 0 && `(${mySlang.length})`}
           </button>
           <button className="text-white text-sm font-bold border-b-2 border-white pb-1">For You</button>
+        </div>
         </div>
       </div>
     </div>
