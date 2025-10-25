@@ -93,33 +93,39 @@ class YouTubeShortsSlangFetcher:
             return hours * 3600 + minutes * 60 + seconds
         return 0
 
-    # youtube_fetcher.py - Replace fetch_shorts with this:
-
-    def fetch_shorts(self, topics: List[str], shorts_per_topic: int = 10) -> List[Dict]:
-        """Fetch videos, then enrich with slang comments."""
+    def fetch_shorts(self, topics: List[str], shorts_per_topic: int = 10, comments_per_short: int = 50, custom_slang: List[str] = None) -> List[Dict]:
+        """
+        Fetch videos for given topics, enrich with comments containing slang.
+        Accepts optional user-defined slang terms.
+        """
         all_shorts_data = []
-        
+
+        # Combine default slang with custom slang if provided
+        slang_terms = set(self.slang_terms)
+        if custom_slang:
+            slang_terms.update(map(str.lower, custom_slang))
+
         for topic in topics:
             # Step 1: Search and get details
             shorts = self.search_shorts(topic, max_results=shorts_per_topic)
-            
+
             for short in shorts:
                 # Filter for actual Shorts (under 60 seconds)
                 if short.get('duration_seconds', 0) > 60:
                     continue
-                    
+
                 video_id = short['video_id']
-                
+
                 # Step 2: Fetch and filter comments
-                comments = self.get_video_comments(video_id, max_results=50) # Max 50 comments
-                
+                comments = self.get_video_comments(video_id, max_results=comments_per_short)
+
                 comments_with_slang = []
                 for comment in comments:
-                    detected_slang = self.detect_slang_in_text(comment['text'])
+                    detected_slang = [s for s in slang_terms if re.search(r'\b' + re.escape(s) + r'\b', comment['text'].lower())]
                     if detected_slang:
                         comment['detected_slang'] = detected_slang
                         comments_with_slang.append(comment)
-                
+
                 if comments_with_slang:
                     # Step 3: Add enriched data to the short
                     short['comments_with_slang'] = comments_with_slang
@@ -129,9 +135,9 @@ class YouTubeShortsSlangFetcher:
                         for slang in comment['detected_slang']
                     ))
                     all_shorts_data.append(short)
-        
+
         return all_shorts_data
-    
+
     def get_video_comments(self, video_id: str, max_results: int = 100) -> List[Dict]:
         """Fetch comments for a specific video (ENGLISH ONLY)"""
         url = f"{self.base_url}/commentThreads"
@@ -172,20 +178,21 @@ class YouTubeShortsSlangFetcher:
             print(f"Error fetching comments for {video_id}: {e}")
             return []
     
-    def detect_slang_in_text(self, text: str) -> List[str]:
+    def detect_popular_in_text(self, text: str) -> List[str]:
         """
-        Detect which slang terms appear in text with accurate word boundary matching
+        Detect which slang terms or popular phrases appear in text
         """
         text_lower = text.lower()
-        found_slang = []
-        
+        found_terms = []
+
+        # Check slang
         for slang in self.slang_terms:
-            # Use word boundaries to match exact words only
             pattern = r'\b' + re.escape(slang) + r'\b'
             if re.search(pattern, text_lower):
-                found_slang.append(slang)
-        
-        return found_slang
+                found_terms.append(slang)
+
+        return found_terms
+
     def is_english_text(self, text: str) -> bool:
         """
         Simple heuristic to filter English comments:
