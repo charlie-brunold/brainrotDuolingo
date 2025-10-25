@@ -73,6 +73,64 @@ class DiscoverRequest(BaseModel):
 cached_shorts = []
 load_cache()
 
+# ============================================================================
+# GROQ AI EVALUATION REQUEST/RESPONSE MODELS
+# ============================================================================
+
+class EvaluateRequest(BaseModel):
+    videoTitle: str
+    videoDescription: str
+    userComment: str
+    targetLanguage: str
+    videoLikeCount: int
+    availableSlang: List[str] = []  # Slang terms available in the video
+
+class EvaluateResponse(BaseModel):
+    score: int
+    grammarScore: int
+    contextScore: int
+    naturalnessScore: int
+    likes: int
+    correction: str
+    mistakes: List[str]
+    goodParts: List[str]
+
+class RespondRequest(BaseModel):
+    userComment: str
+    score: int
+    mistakes: List[str]
+    correction: str
+    videoTitle: str
+    targetLanguage: str
+    availableSlang: List[str] = []  # Slang available in the video
+
+class AIResponse(BaseModel):
+    aiComment: str
+    authorName: str
+    likes: int
+
+class RespondResponse(BaseModel):
+    responses: List[AIResponse]
+
+class SlangBreakdownItem(BaseModel):
+    term: str
+    definition: str
+    usage: str
+
+class ExplainCommentRequest(BaseModel):
+    commentText: str
+    videoTitle: str
+    videoDescription: str
+    detectedSlang: List[str] = []
+
+class ExplainCommentResponse(BaseModel):
+    translation: str
+    slangBreakdown: List[SlangBreakdownItem]
+
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
 @app.get("/")
 def home():
     return {
@@ -251,7 +309,60 @@ def get_stats():
         "most_common_category": max(category_counts.items(), key=lambda x: x[1])[0] if category_counts else None
     }
 
+# Stage 1: Evaluate user comment and return score with social validation
+@app.post("/api/evaluate", response_model=EvaluateResponse)
+def evaluate_comment(request: EvaluateRequest):
+    """
+    Evaluate a user's comment on a video.
 
+    Returns:
+        - score (0-100): Overall evaluation score (capped at 50 if no slang used)
+        - grammarScore, contextScore, naturalnessScore: Breakdown
+        - likes: Percentage of video's likes (realistic social validation)
+        - correction: Corrected version of comment
+        - mistakes: Array of identified errors
+        - goodParts: Array of positive aspects
+    """
+    try:
+        evaluation = groq_evaluator.evaluate_comment(
+            video_title=request.videoTitle,
+            video_description=request.videoDescription,
+            user_comment=request.userComment,
+            target_language=request.targetLanguage,
+            video_like_count=request.videoLikeCount,
+            available_slang=request.availableSlang
+        )
+        return evaluation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
+
+
+# Stage 2: Generate multiple AI responses with roast-with-love personalities
+@app.post("/api/respond", response_model=RespondResponse)
+def generate_ai_response(request: RespondRequest):
+    """
+    Generate multiple Gen Z style AI responses to user's comment.
+    Number of responses scales with comment quality (1-5 responses based on score).
+
+    Returns:
+        - responses: List of 1-5 AI responses (score-based), each with:
+            - aiComment: TikTok-style roast-with-love feedback (tone matches score tier)
+            - authorName: Groq-generated Gen Z username
+            - likes: Random engagement count (10-500)
+    """
+    try:
+        responses = groq_evaluator.generate_multiple_responses(
+            user_comment=request.userComment,
+            score=request.score,
+            mistakes=request.mistakes,
+            correction=request.correction,
+            video_title=request.videoTitle,
+            target_language=request.targetLanguage,
+            available_slang=request.availableSlang
+        )
+        return {"responses": responses}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Response generation error: {str(e)}")
 
 # Stage 3: Explain YouTube comments with slang translations
 @app.post("/api/explain-comment", response_model=ExplainCommentResponse)
