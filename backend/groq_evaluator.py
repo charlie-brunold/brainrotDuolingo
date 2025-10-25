@@ -20,7 +20,7 @@ class GroqCommentEvaluator:
             api_key: Groq API key
         """
         self.client = Groq(api_key=api_key)
-        self.model = "openai/gpt-oss-20b"
+        self.model = "llama-3.3-70b-versatile"
 
         # AI personality author names for responses
         self.ai_authors = [
@@ -838,8 +838,10 @@ Video Description: {video_description}
 Detected Slang Terms: {slang_list}
 
 Your task:
-1. Translate the comment into simple, clear language without any slang
+1. Paraphrase the comment into simple, clear language without any slang. Don't translate word for word, moreso describe the type of thing that the commenter was trying to get at with their comment
 2. For each slang term, provide a definition and show how it's used in this specific context
+
+ACT CONVERSATIONAL, like you're describing this to a friend. Your responses shouldn't feel rigid or contrived. The magic of your response is that it is disarming and helpful for learning objectives.
 
 Keep it concise - this will be shown in a small tooltip.
 
@@ -858,7 +860,7 @@ Return ONLY valid JSON with no markdown formatting, no code blocks, no backticks
 
 CRITICAL JSON RULES:
 1. Return ONLY the JSON object - no markdown, no code blocks, no backticks
-2. Keep translation to 2-3 sentences max
+2. Keep paraphrased section to 2-3 sentences max
 3. Keep each definition to 1 sentence
 4. Keep each usage to 1 sentence showing context
 5. All strings must be wrapped in double quotes
