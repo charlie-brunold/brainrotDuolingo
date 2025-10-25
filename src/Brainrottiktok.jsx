@@ -319,7 +319,21 @@ export default function BrainrotTikTok({ shortsData }) {
       }
 
       const data = await response.json();
-      setSuggestions(data.suggestions || []);
+
+      // Additional frontend filtering: remove duplicates and already-learned terms
+      const learnedTermsLower = new Set(mySlang.map(s => s.term.toLowerCase()));
+      const seenSuggestions = new Set();
+      const filteredSuggestions = (data.suggestions || []).filter(suggestion => {
+        const termLower = suggestion.term.toLowerCase();
+        // Skip if already learned or duplicate in suggestions
+        if (learnedTermsLower.has(termLower) || seenSuggestions.has(termLower)) {
+          return false;
+        }
+        seenSuggestions.add(termLower);
+        return true;
+      });
+
+      setSuggestions(filteredSuggestions);
     } catch (error) {
       console.error('Error fetching suggestions:', error);
       setSuggestions([]);
@@ -799,9 +813,9 @@ export default function BrainrotTikTok({ shortsData }) {
                       </div>
                     ) : suggestions.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {suggestions.map((suggestion, index) => (
+                        {suggestions.map((suggestion) => (
                           <div
-                            key={index}
+                            key={suggestion.term}
                             className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg p-4 border border-purple-500/30 hover:border-purple-500/60 transition-all cursor-pointer"
                           >
                             <div className="flex justify-between items-start mb-2">

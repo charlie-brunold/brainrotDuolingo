@@ -911,12 +911,26 @@ CRITICAL JSON RULES:
 
             # Validate and extract suggestions array
             if isinstance(suggestions_data, dict) and "suggestions" in suggestions_data:
-                return suggestions_data["suggestions"]
+                suggestions = suggestions_data["suggestions"]
             elif isinstance(suggestions_data, list):
-                return suggestions_data
+                suggestions = suggestions_data
             else:
                 print(f"Unexpected suggestion response format: {suggestions_data}")
                 return []
+
+            # Filter out learned terms and duplicates (case-insensitive)
+            learned_lower = set(term.lower() for term in learned_terms)
+            seen_terms = set()
+            filtered_suggestions = []
+
+            for suggestion in suggestions:
+                term = suggestion.get("term", "").lower()
+                # Skip if already learned or duplicate in suggestions
+                if term not in learned_lower and term not in seen_terms:
+                    seen_terms.add(term)
+                    filtered_suggestions.append(suggestion)
+
+            return filtered_suggestions
 
         except Exception as e:
             print(f"Error in suggest_related_slang: {e}")
