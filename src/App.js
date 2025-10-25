@@ -90,7 +90,14 @@ function App() {
     return (
       <div className="relative">
         {/* Original TikTok Component */}
-        <BrainrotTikTok shortsData={shortsData} />
+        <BrainrotTikTok 
+          shortsData={shortsData}
+          onBackToHome={() => {
+            setShowHomePage(true);
+            setUserConfig(null);
+            setShortsData(null);
+          }}
+        />
         
         {/* NEW: Add the refresh button */}
         <RefreshSlangButton 

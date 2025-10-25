@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
 import MySlang from './Myslang.jsx';
+import { ArrowLeft } from 'lucide-react';
 
 
 // --- SLANG TERMS (Static Data) ---
@@ -31,7 +32,7 @@ const SLANG_TERMS = {
   'W': { definition: 'Win, success, or something good', example: 'This is a W video' },
 };
 
-export default function BrainrotTikTok({ shortsData }) {
+export default function BrainrotTikTok({ shortsData, onBackToHome }) {
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
@@ -779,8 +780,18 @@ export default function BrainrotTikTok({ shortsData }) {
           />
         )}
 
-        {/* Top Bar */}
+         {/* Top Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-center gap-8 z-10" style={{ pointerEvents: 'auto' }}>
+          
+          {/* Back Arrow Button */}
+          <button
+            onClick={onBackToHome}
+            className="absolute left-4 top-4 text-white hover:text-gray-300 transition-all z-20 p-2"
+            aria-label="Back to home"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+
           <button
             onClick={() => setShowMySlang(true)}
             className="text-white/70 text-sm font-semibold hover:text-white transition-colors"
