@@ -482,7 +482,7 @@ export default function BrainrotTikTok({ shortsData }) {
                       <iframe
                         width="100%"
                         height="100%"
-                        src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=0&controls=1&rel=0&modestbranding=1`}
+                        src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=1&controls=1&rel=0&modestbranding=1`}
                         title={video.title}
                         frameBorder="0"
                         allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
