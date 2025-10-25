@@ -32,6 +32,22 @@ def save_cache():
         print("⚠️ Failed to save cache:", e)
 
 
+# Try to import groq_evaluator, but make it optional
+try:
+    from groq_evaluator import GroqCommentEvaluator
+    GROQ_AVAILABLE = True
+except ImportError:
+    print("⚠️ Groq evaluator not available - AI features will be disabled")
+    GROQ_AVAILABLE = False
+
+# Try to import groq_evaluator, but make it optional
+try:
+    from groq_evaluator import GroqCommentEvaluator
+    GROQ_AVAILABLE = True
+except ImportError:
+    print("⚠️ Groq evaluator not available - AI features will be disabled")
+    GROQ_AVAILABLE = False
+
 # Load API keys
 load_dotenv()
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY') or 'AIzaSyCq_t-V6P38IQBVK2v0Wk4SdoU5l2Ch15o'
@@ -139,6 +155,60 @@ def home():
         "cached_videos": len(cached_shorts)
     }
 
+@app.post("/api/clear-cache")
+def clear_cache():
+    """Clear expired cache entries"""
+    try:
+        db.clear_expired_cache()
+        return {"message": "Cache cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+
+@app.get("/api/cache-stats")
+def cache_stats():
+    """Get cache statistics"""
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        
+        # Get video count
+        cursor.execute("SELECT COUNT(*) FROM videos")
+        video_count = cursor.fetchone()[0]
+        
+        # Get comment count
+        cursor.execute("SELECT COUNT(*) FROM comments")
+        comment_count = cursor.fetchone()[0]
+        
+        # Get cache entries
+        cursor.execute("SELECT COUNT(*) FROM cache_metadata")
+        cache_entries = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            "videos_cached": video_count,
+            "comments_cached": comment_count,
+            "cache_entries": cache_entries,
+            "database_size": os.path.getsize(db.db_path) if os.path.exists(db.db_path) else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting cache stats: {str(e)}")
+
+
+# main.py - inside get_videos (around line 28)
+@app.get("/api/videos")
+def get_videos():
+    global cached_shorts
+    if cached_shorts:
+        return cached_shorts
+    # Increased number of topics for more variety
+    topics = ["gaming", "food review", "funny moments", "dance", "pets"] 
+    # Pass topics to the fetcher
+    shorts_data = fetcher.fetch_shorts(topics) 
+    cached_shorts = shorts_data
+    return shorts_data
+# ...
 
 @app.get("/api/videos")
 @app.post("/api/videos")  # Support both GET and POST
@@ -375,6 +445,9 @@ def explain_comment(request: ExplainCommentRequest):
         - translation: The comment rewritten in simple language without slang
         - slangBreakdown: Array of objects with term, definition, and usage
     """
+    if not groq_evaluator:
+        raise HTTPException(status_code=503, detail="AI response service not available. Please check Groq API key.")
+    
     try:
         explanation = groq_evaluator.explain_comment(
             comment_text=request.commentText,
