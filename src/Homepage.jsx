@@ -50,28 +50,27 @@ export default function HomePage({ onStartFetching }) {
     setUseDefaults(!useDefaults);
   };
 
-  // Start fetching
-  const handleStart = () => {
-    
-    const finalTopics = topics.length > 0 ? topics : defaultTopics;
-    
-    const config = {
-      topics: finalTopics,
-      custom_slang: customSlang || [],       // rename to match backend param
-      shorts_per_topic: shortsPerTopic,
-      comments_per_short: commentsPerShort
-    };
-    
-    console.log('🚀 Starting with config:', config);
-    console.log('🚀 onStartFetching function:', onStartFetching);
-    
-    if (onStartFetching && typeof onStartFetching === 'function') {
-      onStartFetching(config);
-    } else {
-      console.error('❌ onStartFetching is not a function!', onStartFetching);
-      alert('Error: onStartFetching function not provided!');
-    }
+// Start fetching
+const handleStart = () => {
+  const finalTopics = topics.length > 0 ? topics : defaultTopics;
+  
+  const config = {
+    topics: finalTopics,
+    customSlang: customSlang,  // Keep it simple
+    shortsPerTopic: shortsPerTopic,
+    commentsPerShort: commentsPerShort
   };
+  
+  console.log('🚀 Starting with config:', config);
+  console.log('🚀 onStartFetching function:', onStartFetching);
+  
+  if (onStartFetching && typeof onStartFetching === 'function') {
+    onStartFetching(config);
+  } else {
+    console.error('❌ onStartFetching is not a function!', onStartFetching);
+    alert('Error: onStartFetching function not provided!');
+  }
+};
 
   // Can start if has topics OR will use defaults
   const canStart = topics.length > 0 || true; // Always allow start (will use defaults if no topics)
