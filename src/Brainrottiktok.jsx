@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
+import MySlang from './Myslang.jsx';
+
 
 // --- SLANG TERMS (Static Data) ---
 const SLANG_TERMS = {
@@ -260,8 +262,7 @@ export default function BrainrotTikTok({ shortsData }) {
           example: slang.usage,
           learnedAt: Date.now(),
           videoTitle: currentVideo.title,
-          videoId: currentVideo.video_id,
-          commentText: commentText  // Save the original comment for context
+          videoId: currentVideo.video_id
         }));
 
         setMySlang(prev => {
@@ -768,128 +769,14 @@ export default function BrainrotTikTok({ shortsData }) {
           </div>
         )}
 
-        {/* My Slang Overlay */}
+        {/* My Slang Component */}
         {showMySlang && (
-          <div className="absolute inset-0 bg-black/95 z-50 overflow-y-auto">
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-white text-2xl font-bold">My Slang</h2>
-                  <p className="text-white/60 text-sm">{mySlang.length} {mySlang.length === 1 ? 'term' : 'terms'} learned</p>
-                </div>
-                <button
-                  onClick={() => setShowMySlang(false)}
-                  className="text-white/70 hover:text-white p-2"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Empty State */}
-              {mySlang.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                  <Lightbulb className="w-16 h-16 text-yellow-300 mb-4" />
-                  <h3 className="text-white text-xl font-semibold mb-2">No slang learned yet</h3>
-                  <p className="text-white/60 text-sm max-w-md">
-                    Click the 💡 lightbulb icon next to comments with slang to learn new terms and build your vocabulary!
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Slang Card Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    {mySlang.map((slang, index) => (
-                      <div
-                        key={index}
-                        className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all"
-                      >
-                        {/* YouTube Thumbnail Header */}
-                        {slang.videoId && (
-                          <div className="relative h-32 bg-black/50">
-                            <img
-                              src={`https://img.youtube.com/vi/${slang.videoId}/mqdefault.jpg`}
-                              alt={slang.videoTitle}
-                              className="w-full h-full object-cover opacity-80"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                          </div>
-                        )}
-
-                        <div className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <h3 className="text-white text-xl font-bold">{slang.term}</h3>
-                            <Sparkles className="w-5 h-5 text-yellow-300" />
-                          </div>
-                          <p className="text-white/80 text-sm mb-3">{slang.definition}</p>
-                          <div className="bg-black/30 rounded-lg p-2 mb-3">
-                            <p className="text-white/60 text-xs italic">"{slang.example}"</p>
-                          </div>
-
-                          {/* Original Comment Context */}
-                          {slang.commentText && (
-                            <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-3 mb-3 border border-blue-500/20">
-                              <p className="text-blue-300 text-xs font-semibold mb-1">Original Comment:</p>
-                              <p className="text-white/70 text-xs leading-relaxed">"{slang.commentText}"</p>
-                            </div>
-                          )}
-
-                          <a
-                            href={`https://www.youtube.com/shorts/${slang.videoId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs transition-colors group"
-                          >
-                            <span>From: {slang.videoTitle?.substring(0, 30)}{slang.videoTitle?.length > 30 ? '...' : ''}</span>
-                            <svg className="w-3 h-3 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Suggestions Section */}
-                  <div className="border-t border-white/10 pt-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Sparkles className="w-5 h-5 text-purple-400" />
-                      <h3 className="text-white text-lg font-semibold">Suggested for You</h3>
-                      <span className="text-white/40 text-xs">AI-powered recommendations</span>
-                    </div>
-
-                    {loadingSuggestions ? (
-                      <div className="flex items-center justify-center h-32">
-                        <div className="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
-                      </div>
-                    ) : suggestions.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {suggestions.map((suggestion) => (
-                          <div
-                            key={suggestion.term}
-                            className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg p-4 border border-purple-500/30 hover:border-purple-500/60 transition-all cursor-pointer"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="text-white font-semibold">{suggestion.term}</h4>
-                              <span className="text-xs text-purple-300 bg-purple-500/20 px-2 py-1 rounded">
-                                {suggestion.category}
-                              </span>
-                            </div>
-                            <p className="text-white/70 text-sm mb-2">{suggestion.definition}</p>
-                            <p className="text-purple-300 text-xs italic">{suggestion.reason}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-white/60 text-sm">
-                        Learn a few more slang terms to get personalized suggestions!
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          <MySlang
+            mySlang={mySlang}
+            suggestions={suggestions}
+            loadingSuggestions={loadingSuggestions}
+            onClose={() => setShowMySlang(false)}
+          />
         )}
 
         {/* Top Bar */}
