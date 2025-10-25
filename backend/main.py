@@ -1,20 +1,27 @@
 # main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from youtube_fetcher import YouTubeShortsSlangFetcher
+from groq_evaluator import GroqCommentEvaluator
 from dotenv import load_dotenv
 import os
 from typing import List
 
-# Load API key
+# Load API keys
 load_dotenv()
-API_KEY = os.getenv("YOUTUBE_API_KEY")
-if not API_KEY:
-    raise ValueError("YOUTUBE_API_KEY missing in .env")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Initialize FastAPI and fetcher
+if not YOUTUBE_API_KEY:
+    raise ValueError("YOUTUBE_API_KEY missing in .env")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY missing in .env")
+
+# Initialize FastAPI and services
 app = FastAPI()
-fetcher = YouTubeShortsSlangFetcher(API_KEY)
+fetcher = YouTubeShortsSlangFetcher(YOUTUBE_API_KEY)
+groq_evaluator = GroqCommentEvaluator(GROQ_API_KEY)
 
 # Allow frontend to call
 app.add_middleware(
@@ -50,6 +57,94 @@ def get_videos():
 def refresh_videos(topics: List[str] = ["gaming", "food review", "funny moments", "dance", "pets"]):
     global cached_shorts
     # Pass topics to the fetcher
-    shorts_data = fetcher.fetch_shorts(topics) 
+    shorts_data = fetcher.fetch_shorts(topics)
     cached_shorts = shorts_data
     return shorts_data
+
+
+# ============================================================================
+# GROQ AI EVALUATION ENDPOINTS
+# ============================================================================
+
+# Request/Response Models
+class EvaluateRequest(BaseModel):
+    videoTitle: str
+    videoDescription: str
+    userComment: str
+    targetLanguage: str
+    videoViewCount: int
+
+class EvaluateResponse(BaseModel):
+    score: int
+    grammarScore: int
+    contextScore: int
+    naturalnessScore: int
+    likes: int
+    correction: str
+    mistakes: List[str]
+    goodParts: List[str]
+
+class RespondRequest(BaseModel):
+    userComment: str
+    score: int
+    mistakes: List[str]
+    correction: str
+    videoTitle: str
+    targetLanguage: str
+
+class RespondResponse(BaseModel):
+    aiComment: str
+    authorName: str
+    likes: int
+
+
+# Stage 1: Evaluate user comment and return score with social validation
+@app.post("/api/evaluate", response_model=EvaluateResponse)
+def evaluate_comment(request: EvaluateRequest):
+    """
+    Evaluate a user's comment on a video.
+
+    Returns:
+        - score (0-100): Overall evaluation score
+        - grammarScore, contextScore, naturalnessScore: Breakdown
+        - likes: View-based percentage likes (social validation)
+        - correction: Corrected version of comment
+        - mistakes: Array of identified errors
+        - goodParts: Array of positive aspects
+    """
+    try:
+        evaluation = groq_evaluator.evaluate_comment(
+            video_title=request.videoTitle,
+            video_description=request.videoDescription,
+            user_comment=request.userComment,
+            target_language=request.targetLanguage,
+            video_view_count=request.videoViewCount
+        )
+        return evaluation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
+
+
+# Stage 2: Generate AI response with roast-with-love personality
+@app.post("/api/respond", response_model=RespondResponse)
+def generate_ai_response(request: RespondRequest):
+    """
+    Generate a Gen Z style AI response to user's comment.
+
+    Returns:
+        - aiComment: TikTok-style roast-with-love feedback
+        - authorName: Random AI coach personality name
+        - likes: Random engagement count (10-500)
+    """
+    try:
+        response = groq_evaluator.generate_response(
+            user_comment=request.userComment,
+            score=request.score,
+            mistakes=request.mistakes,
+            correction=request.correction,
+            video_title=request.videoTitle,
+            target_language=request.targetLanguage
+        )
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Response generation error: {str(e)}")
