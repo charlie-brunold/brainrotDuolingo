@@ -1,27 +1,18 @@
 import React from 'react';
-import { X, Sparkles, Lightbulb } from 'lucide-react';
+import { Sparkles, Lightbulb } from 'lucide-react';
 
-export default function MySlang({ 
-  mySlang, 
-  suggestions, 
-  loadingSuggestions, 
-  onClose 
+export default function MySlang({
+  mySlang,
+  suggestions,
+  loadingSuggestions
 }) {
   return (
-    <div className="fixed inset-0 bg-black/95 z-50 overflow-y-auto" style={{ pointerEvents: 'auto' }}>
+    <div className="h-full w-full bg-black overflow-y-auto">
       <div className="p-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-white text-2xl font-bold">My Slang</h2>
-            <p className="text-white/60 text-sm">{mySlang.length} {mySlang.length === 1 ? 'term' : 'terms'} learned</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-white/70 hover:text-white p-2"
-          >
-            <X className="w-6 h-6" />
-          </button>
+        <div className="mb-6">
+          <h2 className="text-white text-2xl font-bold">My Slang</h2>
+          <p className="text-white/60 text-sm">{mySlang.length} {mySlang.length === 1 ? 'term' : 'terms'} learned</p>
         </div>
 
         {/* Empty State */}
