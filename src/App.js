@@ -18,17 +18,32 @@ function App() {
     setShowHomePage(false);
   };
 
-  // Handle when user has run Python and wants to load the JSON
-  const handleLoadData = () => {
-    // Import the JSON file that Python created
-    import('./youtube_shorts_slang_data.json')
-      .then(data => {
-        setShortsData(data.default);
-      })
-      .catch(err => {
-        console.error('❌ Could not load JSON file:', err);
-        alert('Could not find youtube_shorts_slang_data.json. Make sure you ran the Python script first!');
+  // Handle when user wants to load data from API
+  const handleLoadData = async () => {
+    try {
+      console.log('🔄 Loading data from API with user config:', userConfig);
+      const response = await fetch('http://localhost:3001/api/videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topics: userConfig.topics || [],
+          custom_slang: userConfig.custom_slang || [],
+          shorts_per_topic: userConfig.shorts_per_topic || 10,
+          comments_per_short: userConfig.comments_per_short || 50
+        })
       });
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('✅ Loaded data from API:', data);
+      setShortsData(data);
+    } catch (err) {
+      console.error('❌ Could not load data from API:', err);
+      alert('Could not connect to backend API. Make sure the backend is running on port 3001!');
+    }
   };
 
   // Show homepage
@@ -42,7 +57,7 @@ function App() {
       <div className="min-h-screen w-full bg-black flex items-center justify-center p-4">
         <div className="max-w-2xl w-full bg-gray-900 rounded-2xl p-8">
           <h1 className="text-3xl font-bold text-white mb-6 text-center">
-            📋 Step 2: Run Python Script
+            📋 Step 2: Load Videos from API
           </h1>
           
           <div className="space-y-6">
@@ -52,21 +67,21 @@ function App() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Topics:</span>
-                  <span className="text-white">{userConfig.topics.join(', ')}</span>
+                  <span className="text-white">{userConfig.topics ? userConfig.topics.join(', ') : 'None'}</span>
                 </div>
-                {userConfig.customSlang.length > 0 && (
+                {userConfig.custom_slang && userConfig.custom_slang.length > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-400">Custom Slang:</span>
-                    <span className="text-white">{userConfig.customSlang.join(', ')}</span>
+                    <span className="text-white">{userConfig.custom_slang.join(', ')}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-400">Shorts per Topic:</span>
-                  <span className="text-white">{userConfig.shortsPerTopic}</span>
+                  <span className="text-white">{userConfig.shorts_per_topic}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Comments per Short:</span>
-                  <span className="text-white">{userConfig.commentsPerShort}</span>
+                  <span className="text-white">{userConfig.comments_per_short}</span>
                 </div>
               </div>
             </div>
@@ -78,44 +93,22 @@ function App() {
                 <li className="flex gap-3">
                   <span className="text-purple-400 font-bold">1.</span>
                   <div>
-                    <div className="font-semibold text-white">Open Terminal/Command Prompt</div>
-                    <div className="text-gray-400 text-xs mt-1">Navigate to your project folder</div>
+                    <div className="font-semibold text-white">Make sure backend is running</div>
+                    <div className="text-gray-400 text-xs mt-1">Backend should be running on port 3001</div>
                   </div>
                 </li>
                 <li className="flex gap-3">
                   <span className="text-purple-400 font-bold">2.</span>
                   <div>
-                    <div className="font-semibold text-white">Run the Python script:</div>
-                    <code className="block bg-black text-green-400 px-3 py-2 rounded mt-2 text-xs">
-                      python fetching.py
-                    </code>
+                    <div className="font-semibold text-white">Click "Load Videos" button below</div>
+                    <div className="text-gray-400 text-xs mt-1">This will fetch videos from the API using your configuration</div>
                   </div>
                 </li>
                 <li className="flex gap-3">
                   <span className="text-purple-400 font-bold">3.</span>
                   <div>
-                    <div className="font-semibold text-white">Enter your settings when prompted:</div>
-                    <div className="bg-black text-gray-300 px-3 py-2 rounded mt-2 text-xs space-y-1">
-                      <div>Topics: <span className="text-yellow-400">{userConfig.topics.join(', ')}</span></div>
-                      {userConfig.customSlang.length > 0 && (
-                        <div>Custom slang: <span className="text-yellow-400">{userConfig.customSlang.join(', ')}</span></div>
-                      )}
-                      <div>Shorts per topic: <span className="text-yellow-400">{userConfig.shortsPerTopic}</span></div>
-                      <div>Comments per short: <span className="text-yellow-400">{userConfig.commentsPerShort}</span></div>
-                    </div>
-                  </div>
-                </li>
-                <li className="flex gap-3">
-                  <span className="text-purple-400 font-bold">4.</span>
-                  <div>
-                    <div className="font-semibold text-white">Wait for it to finish</div>
-                    <div className="text-gray-400 text-xs mt-1">It will create youtube_shorts_slang_data.json</div>
-                  </div>
-                </li>
-                <li className="flex gap-3">
-                  <span className="text-purple-400 font-bold">5.</span>
-                  <div>
-                    <div className="font-semibold text-white">Click "Load Videos" button below</div>
+                    <div className="font-semibold text-white">Start scrolling through videos!</div>
+                    <div className="text-gray-400 text-xs mt-1">Use mouse wheel or swipe to navigate between videos</div>
                   </div>
                 </li>
               </ol>

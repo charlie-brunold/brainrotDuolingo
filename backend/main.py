@@ -38,18 +38,77 @@ def home():
     return {"message": "Backend is running!"}
 
 
-# main.py - inside get_videos (around line 28)
-@app.get("/api/videos")
-def get_videos():
+# Request model for user configuration
+class UserConfig(BaseModel):
+    topics: List[str]
+    custom_slang: List[str] = []
+    shorts_per_topic: int = 10
+    comments_per_short: int = 50
+
+@app.post("/api/videos")
+def get_videos(config: UserConfig):
     global cached_shorts
-    if cached_shorts:
-        return cached_shorts
-    # Increased number of topics for more variety
-    topics = ["gaming", "food review", "funny moments", "dance", "pets"] 
-    # Pass topics to the fetcher
-    shorts_data = fetcher.fetch_shorts(topics) 
-    cached_shorts = shorts_data
-    return shorts_data
+    # Use user's topics instead of default ones
+    topics = config.topics if config.topics else ["gaming", "food review", "funny moments"]
+    custom_slang = config.custom_slang if config.custom_slang else []
+    
+    try:
+        # Try to fetch real videos with user's configuration
+        shorts_data = fetcher.fetch_shorts(
+            topics=topics,
+            shorts_per_topic=config.shorts_per_topic,
+            comments_per_short=config.comments_per_short,
+            custom_slang=custom_slang
+        )
+        cached_shorts = shorts_data
+        return shorts_data
+    except Exception as e:
+        print(f"Error fetching real videos: {e}")
+        # Return mock data for testing
+        return get_mock_videos(topics, custom_slang)
+
+def get_mock_videos(topics, custom_slang):
+    """Generate mock video data for testing when YouTube API is not available"""
+    mock_videos = []
+    slang_terms = ['fr', 'ngl', 'tbh', 'bussin', 'sigma', 'lit', 'cap', 'nocap', 'vibe', 'slay', 'goat', 'based', 'yeet', 'slaps', 'valid', 'mood']
+    if custom_slang:
+        slang_terms.extend(custom_slang)
+    
+    for i, topic in enumerate(topics[:3]):  # Limit to 3 topics for mock
+        for j in range(2):  # 2 videos per topic
+            video_id = f"mock_{topic}_{j}"
+            mock_videos.append({
+                'video_id': video_id,
+                'title': f"Amazing {topic} video #{j+1}",
+                'description': f"This is a great {topic} short that everyone loves!",
+                'channel': f"{topic.capitalize()}Channel",
+                'thumbnail': f"https://via.placeholder.com/480x360/ff6b6b/ffffff?text={topic.replace(' ', '+')}",
+                'duration_seconds': 30 + (j * 15),
+                'view_count': 100000 + (i * 50000) + (j * 25000),
+                'like_count': 5000 + (i * 2000) + (j * 1000),
+                'comment_count': 200 + (i * 50) + (j * 25),
+                'url': f"https://www.youtube.com/shorts/{video_id}",
+                'comments_with_slang': [
+                    {
+                        'comment_id': f"comment_{i}_{j}_1",
+                        'text': f"This {topic} content is {slang_terms[i % len(slang_terms)]} fr!",
+                        'author': f"User{i}{j}",
+                        'like_count': 10 + (i * 5) + j,
+                        'detected_slang': [slang_terms[i % len(slang_terms)]]
+                    },
+                    {
+                        'comment_id': f"comment_{i}_{j}_2", 
+                        'text': f"Bro this is {slang_terms[(i+1) % len(slang_terms)]} no cap",
+                        'author': f"Viewer{i}{j}",
+                        'like_count': 5 + (i * 3) + j,
+                        'detected_slang': [slang_terms[(i+1) % len(slang_terms)]]
+                    }
+                ],
+                'slang_comment_count': 2,
+                'unique_slang_terms': [slang_terms[i % len(slang_terms)], slang_terms[(i+1) % len(slang_terms)]]
+            })
+    
+    return mock_videos
 # ...
 
 # main.py - inside refresh_videos (around line 36)
