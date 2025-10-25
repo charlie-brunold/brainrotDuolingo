@@ -144,6 +144,18 @@ class ExplainCommentResponse(BaseModel):
     translation: str
     slangBreakdown: List[SlangBreakdownItem]
 
+class SuggestSlangRequest(BaseModel):
+    learnedTerms: List[str]
+
+class SlangSuggestion(BaseModel):
+    term: str
+    definition: str
+    reason: str
+    category: str
+
+class SuggestSlangResponse(BaseModel):
+    suggestions: List[SlangSuggestion]
+
 # ============================================================================
 # API ENDPOINTS
 # ============================================================================
@@ -501,6 +513,26 @@ def explain_comment(request: ExplainCommentRequest):
         return explanation
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
+
+
+# Stage 4: Suggest related slang based on learned terms
+@app.post("/api/suggest-slang", response_model=SuggestSlangResponse)
+def suggest_slang(request: SuggestSlangRequest):
+    """
+    Suggest related slang terms based on what the user has learned.
+    Uses AI to identify terms that are commonly used together or in similar contexts.
+
+    Returns:
+        - suggestions: Array of suggested slang terms with definitions, reasons, and categories
+    """
+    try:
+        suggestions = groq_evaluator.suggest_related_slang(
+            learned_terms=request.learnedTerms,
+            slang_database=slang_discovery.slang_database
+        )
+        return {"suggestions": suggestions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Suggestion error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

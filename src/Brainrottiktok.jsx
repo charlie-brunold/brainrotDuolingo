@@ -43,6 +43,14 @@ export default function BrainrotTikTok({ shortsData }) {
   const [explanations, setExplanations] = useState({}); // Cache for comment explanations
   const [activeExplanation, setActiveExplanation] = useState(null); // Which comment has tooltip visible
   const [loadingExplanation, setLoadingExplanation] = useState(null); // Which comment is loading
+  const [mySlang, setMySlang] = useState(() => {
+    // Load from sessionStorage on mount
+    const saved = sessionStorage.getItem('brainrot_my_slang');
+    return saved ? JSON.parse(saved) : [];
+  }); // Array of learned slang with metadata
+  const [showMySlang, setShowMySlang] = useState(false); // Toggle for My Slang overlay
+  const [suggestions, setSuggestions] = useState([]); // AI-suggested slang terms
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false); // Loading state for suggestions
   const containerRef = useRef(null);
   
   // Use provided shortsData or fallback
@@ -244,6 +252,33 @@ export default function BrainrotTikTok({ shortsData }) {
 
       // Show the explanation
       setActiveExplanation(commentId);
+
+      // Track slang terms learned (add to My Slang)
+      if (explanation.slangBreakdown && explanation.slangBreakdown.length > 0) {
+        const newSlangTerms = explanation.slangBreakdown.map(slang => ({
+          term: slang.term,
+          definition: slang.definition,
+          example: slang.usage,
+          learnedAt: Date.now(),
+          videoTitle: currentVideo.title,
+          videoId: currentVideo.video_id
+        }));
+
+        setMySlang(prev => {
+          // Filter out terms already in mySlang
+          const existingTerms = new Set(prev.map(s => s.term.toLowerCase()));
+          const uniqueNewTerms = newSlangTerms.filter(
+            slang => !existingTerms.has(slang.term.toLowerCase())
+          );
+
+          const updated = [...prev, ...uniqueNewTerms];
+
+          // Save to sessionStorage
+          sessionStorage.setItem('brainrot_my_slang', JSON.stringify(updated));
+
+          return updated;
+        });
+      }
     } catch (error) {
       console.error('Failed to get explanation:', error);
       // Show error explanation
@@ -259,6 +294,46 @@ export default function BrainrotTikTok({ shortsData }) {
       setLoadingExplanation(null);
     }
   };
+
+  // Fetch AI-powered slang suggestions
+  const fetchSuggestions = async () => {
+    if (mySlang.length === 0) {
+      setSuggestions([]);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/suggest-slang', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          learnedTerms: mySlang.map(s => s.term)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch suggestions');
+      }
+
+      const data = await response.json();
+      setSuggestions(data.suggestions || []);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  // Fetch suggestions when My Slang overlay is opened
+  useEffect(() => {
+    if (showMySlang && mySlang.length > 0) {
+      fetchSuggestions();
+    }
+  }, [showMySlang]);
 
   const handleSubmitComment = async () => {
     if (!comment.trim() || isEvaluating) return;
@@ -659,9 +734,107 @@ export default function BrainrotTikTok({ shortsData }) {
           </div>
         )}
 
+        {/* My Slang Overlay */}
+        {showMySlang && (
+          <div className="absolute inset-0 bg-black/95 z-50 overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-white text-2xl font-bold">My Slang</h2>
+                  <p className="text-white/60 text-sm">{mySlang.length} {mySlang.length === 1 ? 'term' : 'terms'} learned</p>
+                </div>
+                <button
+                  onClick={() => setShowMySlang(false)}
+                  className="text-white/70 hover:text-white p-2"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Empty State */}
+              {mySlang.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-64 text-center px-4">
+                  <Lightbulb className="w-16 h-16 text-yellow-300 mb-4" />
+                  <h3 className="text-white text-xl font-semibold mb-2">No slang learned yet</h3>
+                  <p className="text-white/60 text-sm max-w-md">
+                    Click the 💡 lightbulb icon next to comments with slang to learn new terms and build your vocabulary!
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Slang Card Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                    {mySlang.map((slang, index) => (
+                      <div
+                        key={index}
+                        className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-white/10 hover:border-white/30 transition-all"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-white text-xl font-bold">{slang.term}</h3>
+                          <Sparkles className="w-5 h-5 text-yellow-300" />
+                        </div>
+                        <p className="text-white/80 text-sm mb-3">{slang.definition}</p>
+                        <div className="bg-black/30 rounded-lg p-2 mb-3">
+                          <p className="text-white/60 text-xs italic">"{slang.example}"</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-white/40 text-xs">
+                          <span>From: {slang.videoTitle?.substring(0, 30)}{slang.videoTitle?.length > 30 ? '...' : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Suggestions Section */}
+                  <div className="border-t border-white/10 pt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Sparkles className="w-5 h-5 text-purple-400" />
+                      <h3 className="text-white text-lg font-semibold">Suggested for You</h3>
+                      <span className="text-white/40 text-xs">AI-powered recommendations</span>
+                    </div>
+
+                    {loadingSuggestions ? (
+                      <div className="flex items-center justify-center h-32">
+                        <div className="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    ) : suggestions.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {suggestions.map((suggestion, index) => (
+                          <div
+                            key={index}
+                            className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg p-4 border border-purple-500/30 hover:border-purple-500/60 transition-all cursor-pointer"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="text-white font-semibold">{suggestion.term}</h4>
+                              <span className="text-xs text-purple-300 bg-purple-500/20 px-2 py-1 rounded">
+                                {suggestion.category}
+                              </span>
+                            </div>
+                            <p className="text-white/70 text-sm mb-2">{suggestion.definition}</p>
+                            <p className="text-purple-300 text-xs italic">{suggestion.reason}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-white/60 text-sm">
+                        Learn a few more slang terms to get personalized suggestions!
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Top Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-center gap-8 z-10">
-          <button className="text-white/70 text-sm font-semibold">Following</button>
+          <button
+            onClick={() => setShowMySlang(true)}
+            className="text-white/70 text-sm font-semibold hover:text-white transition-colors"
+          >
+            My Slang {mySlang.length > 0 && `(${mySlang.length})`}
+          </button>
           <button className="text-white text-sm font-bold border-b-2 border-white pb-1">For You</button>
         </div>
       </div>

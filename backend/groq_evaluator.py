@@ -865,3 +865,114 @@ CRITICAL JSON RULES:
 4. Keep each usage to 1 sentence showing context
 5. All strings must be wrapped in double quotes
 6. If no slang detected, return empty slangBreakdown array"""
+
+    def suggest_related_slang(
+        self,
+        learned_terms: List[str],
+        slang_database: Dict
+    ) -> List[Dict]:
+        """
+        Use AI to suggest related slang terms based on what the user has already learned.
+        Focuses on terms that are commonly used together or in similar contexts.
+
+        Args:
+            learned_terms: List of slang terms the user has already learned
+            slang_database: Dictionary of all available slang terms with their definitions
+
+        Returns:
+            List of suggested slang dictionaries with term, definition, reason, and category
+        """
+        if not learned_terms or not slang_database:
+            # Return empty if no data to work with
+            return []
+
+        # Prepare slang database excerpt for the prompt (limit to 50 random terms to avoid token limits)
+        import random as rand
+        all_terms = list(slang_database.items())
+        sample_size = min(50, len(all_terms))
+        slang_sample = dict(rand.sample(all_terms, sample_size))
+
+        # Build prompt for AI suggestions
+        prompt = self._build_suggestion_prompt(learned_terms, slang_sample)
+
+        try:
+            response = self.client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }],
+                model=self.model,
+                temperature=0.8,  # Creative but not too random
+                max_tokens=800
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            suggestions_data = self._parse_json_response(response_text)
+
+            # Validate and extract suggestions array
+            if isinstance(suggestions_data, dict) and "suggestions" in suggestions_data:
+                return suggestions_data["suggestions"]
+            elif isinstance(suggestions_data, list):
+                return suggestions_data
+            else:
+                print(f"Unexpected suggestion response format: {suggestions_data}")
+                return []
+
+        except Exception as e:
+            print(f"Error in suggest_related_slang: {e}")
+            return []
+
+    def _build_suggestion_prompt(
+        self,
+        learned_terms: List[str],
+        slang_database: Dict
+    ) -> str:
+        """Build the prompt for suggesting related slang terms."""
+
+        learned_list = ", ".join(learned_terms)
+
+        # Format slang database for prompt (show term: definition pairs)
+        slang_entries = []
+        for term, info in slang_database.items():
+            definition = info.get('definition', 'No definition')
+            category = info.get('category', 'descriptive')
+            slang_entries.append(f"  - {term}: {definition} (category: {category})")
+
+        slang_db_text = "\n".join(slang_entries[:40])  # Limit to prevent token overflow
+
+        return f"""You are a Gen Z slang expert analyzing a learner's vocabulary to suggest related terms.
+
+[What They've Learned]
+{learned_list}
+
+[Available Slang Database]
+{slang_db_text}
+
+[Task]
+Suggest 6 slang terms from the database that would be most valuable for them to learn next.
+
+Prioritize terms that are:
+1. COMMONLY USED TOGETHER with their learned terms (e.g., "rizz" often appears with "aura", "sigma")
+2. IN SIMILAR CATEGORIES or contexts (e.g., if they learned positive vibes slang, suggest more positive vibes)
+3. LOGICAL PROGRESSION from what they know (don't jump to super niche terms)
+
+[Output Format]
+Return ONLY valid JSON with no markdown formatting, no code blocks, no backticks:
+{{
+  "suggestions": [
+    {{
+      "term": "<slang term from database>",
+      "definition": "<definition from database>",
+      "reason": "<1 sentence explaining why this pairs well with what they've learned>",
+      "category": "<category from database>"
+    }}
+  ]
+}}
+
+CRITICAL JSON RULES:
+1. Return ONLY the JSON object - no markdown, no code blocks, no backticks
+2. Suggest exactly 6 terms (or fewer if database is small)
+3. Only suggest terms that exist in the provided database
+4. Keep reason to 1 sentence (e.g., "Often used with rizz in dating contexts")
+5. All strings must be wrapped in double quotes
+6. DO NOT suggest terms they've already learned"""
