@@ -1,0 +1,27 @@
+{
+  "fr": {
+    "definition": "For real - emphasizing truth or agreement",
+    "category": "agreement",
+    "example": "That was amazing fr"
+  },
+  "ngl": {
+    "definition": "Not gonna lie - introducing honest opinion",
+    "category": "expression",
+    "example": "Ngl this is really good"
+  },
+  "bussin": {
+    "definition": "Really good, especially about food",
+    "category": "positive",
+    "example": "These tacos are bussin"
+  },
+  "bruh": {
+    "definition": "Expression of disbelief or frustration",
+    "category": "expression",
+    "example": "Bruh what just happened"
+  },
+  "bet": {
+    "definition": "Agreement or confirmation, like saying okay",
+    "category": "agreement",
+    "example": "Bet, see you there"
+  }
+}

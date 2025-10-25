@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import HomePage from './Homepage';
 import BrainrotTikTok from './Brainrottiktok.jsx';
-
+import RefreshSlangButton from './RefreshButton.jsx';
 function App() {
   const [showHomePage, setShowHomePage] = useState(true);
   const [userConfig, setUserConfig] = useState(null);
@@ -142,8 +142,25 @@ function App() {
 
   // Show videos
   if (shortsData) {
-    return <BrainrotTikTok shortsData={shortsData} />;
+    return (
+      <div className="relative">
+        {/* Original TikTok Component */}
+        <BrainrotTikTok shortsData={shortsData} />
+        
+        {/* NEW: Add the refresh button */}
+        <RefreshSlangButton 
+          topics={userConfig?.topics || ['gaming', 'food review', 'dance']}
+          apiUrl="http://localhost:3001"
+          position="bottom-right"
+          onSuccess={(newSlang) => {
+            console.log('🎉 Discovered new slang!', newSlang);
+            // Optionally reload data here
+          }}
+        />
+      </div>
+    );
   }
+
 
   return null;
 }

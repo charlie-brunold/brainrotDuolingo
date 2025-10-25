@@ -28,7 +28,6 @@ class YouTubeShortsSlangFetcher:
             'maxResults': max_results,
             'order': 'viewCount',
             'relevanceLanguage': 'en',
-            'regionCode': 'US'
         }
         try:
             response = requests.get(url, params=params, timeout=10)
