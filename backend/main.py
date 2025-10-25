@@ -131,7 +131,7 @@ class EvaluateRequest(BaseModel):
     videoDescription: str
     userComment: str
     targetLanguage: str
-    videoViewCount: int
+    videoLikeCount: int
     availableSlang: List[str] = []  # Slang terms available in the video
 
 class EvaluateResponse(BaseModel):
@@ -169,9 +169,9 @@ def evaluate_comment(request: EvaluateRequest):
     Evaluate a user's comment on a video.
 
     Returns:
-        - score (0-100): Overall evaluation score
+        - score (0-100): Overall evaluation score (capped at 50 if no slang used)
         - grammarScore, contextScore, naturalnessScore: Breakdown
-        - likes: View-based percentage likes (social validation)
+        - likes: Percentage of video's likes (realistic social validation)
         - correction: Corrected version of comment
         - mistakes: Array of identified errors
         - goodParts: Array of positive aspects
@@ -182,7 +182,7 @@ def evaluate_comment(request: EvaluateRequest):
             video_description=request.videoDescription,
             user_comment=request.userComment,
             target_language=request.targetLanguage,
-            video_view_count=request.videoViewCount,
+            video_like_count=request.videoLikeCount,
             available_slang=request.availableSlang
         )
         return evaluation
@@ -195,10 +195,11 @@ def evaluate_comment(request: EvaluateRequest):
 def generate_ai_response(request: RespondRequest):
     """
     Generate multiple Gen Z style AI responses to user's comment.
+    Number of responses scales with comment quality (1-5 responses based on score).
 
     Returns:
-        - responses: List of 2-4 AI responses, each with:
-            - aiComment: TikTok-style roast-with-love feedback
+        - responses: List of 1-5 AI responses (score-based), each with:
+            - aiComment: TikTok-style roast-with-love feedback (tone matches score tier)
             - authorName: Groq-generated Gen Z username
             - likes: Random engagement count (10-500)
     """

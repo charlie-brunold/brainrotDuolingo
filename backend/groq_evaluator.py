@@ -42,7 +42,7 @@ class GroqCommentEvaluator:
         video_description: str,
         user_comment: str,
         target_language: str,
-        video_view_count: int,
+        video_like_count: int,
         available_slang: List[str] = None
     ) -> Dict:
         """
@@ -53,7 +53,7 @@ class GroqCommentEvaluator:
             video_description: Description of the video
             user_comment: The user's comment to evaluate
             target_language: Language being learned (e.g., "English", "Spanish")
-            video_view_count: Number of views on the video (for like calculation)
+            video_like_count: Number of likes on the video (for like calculation)
             available_slang: List of slang terms available in the video
 
         Returns:
@@ -93,7 +93,7 @@ class GroqCommentEvaluator:
 
             # Calculate social validation (likes) based on score
             score = evaluation_data.get("score", 0)
-            likes = self.calculate_view_based_likes(score, video_view_count)
+            likes = self.calculate_likes(score, video_like_count)
             evaluation_data["likes"] = likes
 
             return evaluation_data
@@ -154,7 +154,7 @@ class GroqCommentEvaluator:
                 }],
                 model=self.model,
                 temperature=0.9,  # Higher temp for creative/funny responses
-                max_tokens=200    # Short response only
+                max_tokens=400    # Short response only
             )
 
             # Get plain text response
@@ -178,46 +178,69 @@ class GroqCommentEvaluator:
                 "likes": 42
             }
 
-    def calculate_view_based_likes(self, score: int, video_view_count: int) -> int:
+    def calculate_likes(self, score: int, video_like_count: int) -> int:
         """
-        Calculate likes as a percentage of video views based on score tier.
-        Uses realistic social media engagement rates.
+        Calculate user comment likes as a percentage of the video's like count.
+        Users get a small fraction of what the video itself received, based on score quality.
 
         Score Tiers:
-        - 90-100: Super viral (0.01-0.1% of views)
-        - 80-89:  Viral (0.005-0.01% of views)
-        - 70-79:  Popular (0.001-0.005% of views)
-        - 60-69:  Above average (0.0005-0.001% of views)
-        - 50-59:  Average (0.0001-0.0005% of views)
-        - 40-49:  Below average (0.00005-0.0001% of views)
-        - 0-39:   Poor (0.00001-0.00005% of views)
+        - 90-100: Viral comment (0.5-2% of video likes)
+        - 70-89:  Popular comment (0.1-0.5% of video likes)
+        - 50-69:  Decent comment (0.01-0.1% of video likes)
+        - 30-49:  Weak comment (0.001-0.01% of video likes)
+        - 0-29:   Poor comment (0.0001-0.001% of video likes)
 
         Args:
             score: Evaluation score (0-100)
-            video_view_count: Number of views on the video
+            video_like_count: Number of likes on the video
 
         Returns:
-            Calculated like count (minimum 1)
+            Calculated like count (minimum 0 for scores below 30)
         """
         # Define realistic percentage ranges for each tier
         if score >= 90:
-            percentage = random.uniform(0.0001, 0.001)      # 0.01-0.1%
-        elif score >= 80:
-            percentage = random.uniform(0.00005, 0.0001)    # 0.005-0.01%
+            percentage = random.uniform(0.005, 0.02)      # 0.5-2%
         elif score >= 70:
-            percentage = random.uniform(0.00001, 0.00005)   # 0.001-0.005%
-        elif score >= 60:
-            percentage = random.uniform(0.000005, 0.00001)  # 0.0005-0.001%
+            percentage = random.uniform(0.001, 0.005)     # 0.1-0.5%
         elif score >= 50:
-            percentage = random.uniform(0.000001, 0.000005) # 0.0001-0.0005%
-        elif score >= 40:
-            percentage = random.uniform(0.0000005, 0.000001)  # 0.00005-0.0001%
+            percentage = random.uniform(0.0001, 0.001)    # 0.01-0.1%
+        elif score >= 30:
+            percentage = random.uniform(0.00001, 0.0001)  # 0.001-0.01%
         else:
-            percentage = random.uniform(0.0000001, 0.0000005) # 0.00001-0.00005%
+            percentage = random.uniform(0.000001, 0.00001) # 0.0001-0.001%
 
-        # Calculate likes and ensure minimum of 1
-        likes = int(video_view_count * percentage)
-        return max(1, likes)
+        # Calculate likes (allow 0 for very poor comments)
+        likes = int(video_like_count * percentage)
+        return max(0, likes)
+
+    def calculate_response_count(self, score: int) -> int:
+        """
+        Determine how many AI responses to generate based on comment score.
+        Higher scores = more engagement/social validation from the community.
+
+        Score Tiers:
+        - 90-100: Fire comment (4-5 responses - everyone's hyping you up!)
+        - 70-89:  Solid comment (3-4 responses - good engagement)
+        - 50-69:  Mid comment (2-3 responses - moderate engagement)
+        - 30-49:  Struggling comment (1-2 responses - minimal engagement)
+        - 0-29:   Yikes comment (1 response - single reality check)
+
+        Args:
+            score: Evaluation score (0-100)
+
+        Returns:
+            Number of AI responses to generate (1-5)
+        """
+        if score >= 90:
+            return random.randint(4, 5)  # Fire = everyone responds
+        elif score >= 70:
+            return random.randint(3, 4)  # Solid = good engagement
+        elif score >= 50:
+            return random.randint(2, 3)  # Mid = moderate
+        elif score >= 30:
+            return random.randint(1, 2)  # Struggling = minimal
+        else:
+            return 1  # Yikes = single roast
 
     def _detect_slang_in_comment(self, user_comment: str, available_slang: List[str]) -> List[str]:
         """
@@ -275,28 +298,40 @@ class GroqCommentEvaluator:
         if detected_slang:
             evaluation_criteria = """[Evaluation Criteria]
 Score 0-100 based on:
-1. SLANG USAGE CORRECTNESS (60% weight) - PRIMARY FOCUS
+1. SLANG USAGE CORRECTNESS (70% weight) - PRIMARY FOCUS
    - Is the slang term used in the correct context?
    - Does it follow proper idiomatic usage?
    - Is it grammatically integrated correctly?
-2. General grammar/accuracy (25% weight) - Supporting language quality
-3. Relevance to video (15% weight) - Context appropriateness
+2. General grammar/accuracy (20% weight) - Supporting language quality
+3. Relevance to video (10% weight) - Context appropriateness
 
-IMPORTANT: Focus heavily on whether the slang is used correctly. Wrong slang usage should significantly lower the score."""
+IMPORTANT: Focus heavily on whether the slang is used correctly. Wrong slang usage should significantly lower the score.
+
+MODIFIERS:
+- Comment is less than 5 words: Apply -10 penalty to final score"""
         elif available_slang:
             evaluation_criteria = """[Evaluation Criteria]
-Score 0-100 based on:
-1. Grammar/accuracy (50% weight) - Language correctness
-2. Relevance to video (30% weight) - Context appropriateness
-3. Vocabulary/naturalness (20% weight) - General expression
+CRITICAL: User had slang available but DID NOT use any. MAXIMUM POSSIBLE SCORE IS 50/100.
 
-NOTE: User had slang terms available but chose not to use them. This is okay, but mention in goodParts if they could have used slang to be more engaging."""
+Score 0-50 based on:
+1. Grammar/accuracy (40% weight) - Language correctness
+2. Relevance to video (30% weight) - Context appropriateness
+3. Vocabulary/naturalness (30% weight) - General expression
+
+HARD CAP: Because no slang was used when it was available, the score CANNOT exceed 50/100 under any circumstances.
+
+MODIFIERS:
+- Comment is less than 5 words: Apply -10 penalty to final score
+- Mention in goodParts that they could have used slang to score higher"""
         else:
             evaluation_criteria = """[Evaluation Criteria]
 Score 0-100 based on:
 1. Grammar/accuracy (50% weight) - Most important for language learning
 2. Relevance to video (30% weight) - Ensures comprehension
-3. Vocabulary/naturalness (20% weight) - Rewards idiomatic usage"""
+3. Vocabulary/naturalness (20% weight) - Rewards idiomatic usage
+
+MODIFIERS:
+- Comment is less than 5 words: Apply -10 penalty to final score"""
 
         return f"""You are a language learning evaluator specializing in slang and idiomatic expressions. Analyze this user's comment.
 
@@ -595,11 +630,11 @@ Output ONLY the username with no explanation or punctuation."""
 
         detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
 
-        # Randomly choose 2-4 responses if not specified
+        # Calculate response count based on score if not specified
         if num_responses is None:
-            num_responses = random.randint(2, 4)
+            num_responses = self.calculate_response_count(score)
         else:
-            num_responses = max(2, min(4, num_responses))  # Clamp between 2-4
+            num_responses = max(1, min(5, num_responses))  # Clamp between 1-5
 
         responses = []
 
@@ -679,29 +714,72 @@ Output ONLY the username with no explanation or punctuation."""
             slang_list = ", ".join(available_slang[:3])  # Show first 3
             slang_context = f"\n- Available slang they could have used: {slang_list}"
 
-        # Define different personality focuses with slang awareness
-        if detected_slang:
-            personalities = [
-                # Response 0: Supportive friend focused on slang
-                "You're encouraging and specifically comment on their slang usage. If they used it right, hype them up. If wrong, gently correct.",
-                # Response 1: Playful roaster about slang
-                "You're playful and will roast slang mistakes hard but funny. If they nailed it, show respect.",
-                # Response 2: Impressed by slang attempt
-                "You're surprised they tried using slang. Comment on whether it worked or not.",
-                # Response 3: Casual slang validator
-                "You're super casual, just dropping a quick note about their slang usage like it's no big deal."
-            ]
+        # Define different personality focuses with slang and score awareness
+        # Adjust tone based on score tier
+        if score >= 90:
+            # Fire comment - pure hype energy
+            if detected_slang:
+                personalities = [
+                    "You're HYPED. They nailed the slang perfectly and you can't contain your excitement.",
+                    "You're blown away by how perfect their slang usage is. Celebrate this fire comment.",
+                    "You're impressed and want everyone to see this amazing slang usage.",
+                    "You're vibing with their energy. This is exactly how slang should be used."
+                ]
+            else:
+                personalities = [
+                    "You're impressed with their comment quality but playfully suggest they could have leveled up with slang.",
+                    "You appreciate the solid comment but hint they missed a chance to be legendary with slang.",
+                    "You're supportive. They did great but could have been even more fire with slang.",
+                    "You're chill. Good comment, but imagine if they used that available slang."
+                ]
+        elif score >= 70:
+            # Solid comment - balanced encouragement
+            if detected_slang:
+                personalities = [
+                    "You're encouraging. They got the slang right and you're here for it.",
+                    "You're supportive. Acknowledge they did well with the slang.",
+                    "You're impressed they used slang correctly. Give them props.",
+                    "You're casual but positive about their slang attempt."
+                ]
+            else:
+                personalities = [
+                    "You're encouraging but suggest trying slang next time.",
+                    "You're supportive. Good grammar but they missed the slang opportunity.",
+                    "You're chill. Solid comment, just needs some slang flavor.",
+                    "You're friendly. Point out the available slang they could have used."
+                ]
+        elif score >= 50:
+            # Mid comment - constructive criticism
+            if detected_slang:
+                personalities = [
+                    "You're constructive. They tried slang but it needs work.",
+                    "You're helpful. Point out what went wrong with their slang usage.",
+                    "You're patient. They attempted slang but didn't quite nail it.",
+                    "You're casual about correcting their slang mistake."
+                ]
+            else:
+                personalities = [
+                    "You're pointing out they should have used the available slang.",
+                    "You're direct. They missed the whole point of using slang.",
+                    "You're suggesting they need to engage with the slang more.",
+                    "You're casual but firm about the missed slang opportunity."
+                ]
         else:
-            personalities = [
-                # Response 0: Gentle suggestion to try slang
-                "You're encouraging. Mention they could try using the slang from the video.",
-                # Response 1: Playful about missed slang opportunity
-                "You're playful. Point out they missed a chance to use some fire slang.",
-                # Response 2: General commenter
-                "You're just a regular commenter reacting to what they said.",
-                # Response 3: Casual observer
-                "You're super casual, just dropping a quick reaction."
-            ]
+            # Low score - reality check with gentle roast
+            if detected_slang:
+                personalities = [
+                    "You're gently roasting their slang misuse. It's pretty off but you're not mean.",
+                    "You're pointing out their slang is way wrong. Keep it light but honest.",
+                    "You're helping them understand their slang mistake was significant.",
+                    "You're being real about how badly they missed the mark on slang."
+                ]
+            else:
+                personalities = [
+                    "You're pointing out this comment needed a lot more effort, especially with slang.",
+                    "You're being real. This was low effort and they skipped the slang entirely.",
+                    "You're suggesting they try harder next time, especially with the available slang.",
+                    "You're casual but honest that this comment wasn't it."
+                ]
 
         personality = personalities[response_index % len(personalities)]
 
