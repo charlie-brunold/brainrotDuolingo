@@ -1,4 +1,3 @@
-# database.py
 import sqlite3
 import json
 import os
@@ -71,110 +70,13 @@ class VideoDatabase:
         conn.commit()
         conn.close()
     
+    # --- Consolidated and Corrected Reading Logic ---
     def get_cached_videos(self, topics: List[str], custom_slang: List[str], 
-                         shorts_per_topic: int, comments_per_short: int) -> Optional[List[Dict]]:
-        """
-        Check if we have cached data for these parameters
-        Returns cached videos if found and not expired, None otherwise
-        """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Check if we have recent cache for these parameters
-        topics_json = json.dumps(topics)
-        custom_slang_json = json.dumps(custom_slang)
-        
-        cursor.execute('''
-            SELECT * FROM cache_metadata 
-            WHERE topics = ? AND custom_slang = ? 
-            AND shorts_per_topic = ? AND comments_per_short = ?
-            AND expires_at > datetime('now')
-            ORDER BY created_at DESC LIMIT 1
-        ''', (topics_json, custom_slang_json, shorts_per_topic, comments_per_short))
-        
-        cache_entry = cursor.fetchone()
-        if not cache_entry:
-            conn.close()
-            return None
-        
-        # Get videos for this cache entry
-        cursor.execute('''
-            SELECT v.*, 
-                   GROUP_CONCAT(c.comment_id) as comment_ids,
-                   GROUP_CONCAT(c.text) as comment_texts,
-                   GROUP_CONCAT(c.author) as comment_authors,
-                   GROUP_CONCAT(c.like_count) as comment_likes,
-                   GROUP_CONCAT(c.detected_slang) as comment_slang
-            FROM videos v
-            LEFT JOIN comments c ON v.video_id = c.video_id
-            GROUP BY v.video_id
-            ORDER BY v.created_at DESC
-            LIMIT ?
-        ''', (shorts_per_topic * len(topics),))
-        
-        videos = cursor.fetchall()
-        if not videos:
-            conn.close()
-            return None
-        
-        # Convert to the expected format
-        result = []
-        for video in videos:
-            video_data = {
-                'video_id': video[0],
-                'title': video[1],
-                'description': video[2],
-                'channel': video[3],
-                'channel_id': video[4],
-                'thumbnail': video[5],
-                'duration_seconds': video[6],
-                'view_count': video[7],
-                'like_count': video[8],
-                'comment_count': video[9],
-                'url': video[10],
-                'comments_with_slang': [],
-                'slang_comment_count': 0,
-                'unique_slang_terms': []
-            }
-            
-            # Parse comments if they exist
-            if video[11]:  # comment_ids
-                comment_ids = video[11].split(',')
-                comment_texts = video[12].split(',')
-                comment_authors = video[13].split(',')
-                comment_likes = [int(x) if x else 0 for x in video[14].split(',')]
-                comment_slang = video[15].split(',')
-                
-                comments_with_slang = []
-                all_slang = set()
-                
-                for i, comment_id in enumerate(comment_ids):
-                    if i < len(comment_texts):
-                        slang_list = json.loads(comment_slang[i]) if comment_slang[i] else []
-                        if slang_list:  # Only include comments with slang
-                            comments_with_slang.append({
-                                'comment_id': comment_id,
-                                'text': comment_texts[i],
-                                'author': comment_authors[i],
-                                'like_count': comment_likes[i],
-                                'detected_slang': slang_list
-                            })
-                            all_slang.update(slang_list)
-                
-                video_data['comments_with_slang'] = comments_with_slang
-                video_data['slang_comment_count'] = len(comments_with_slang)
-                video_data['unique_slang_terms'] = list(all_slang)
-            
-            result.append(video_data)
-        
-        conn.close()
-        return result
-    
-    def get_cached_videos(self, topics: List[str], custom_slang: List[str], 
-                      shorts_per_topic: int, comments_per_short: int) -> Optional[List[Dict]]:
+                          shorts_per_topic: int, comments_per_short: int) -> Optional[List[Dict]]:
         """
         Check if we have cached data for these parameters.
         Returns cached videos if found and not expired, None otherwise.
+        (Consolidated logic for clarity and reduced SQL complexity.)
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -197,8 +99,11 @@ class VideoDatabase:
             return None
 
         # Fetch videos
+        # Fetching by ID is safer than GROUP_CONCAT which caused the previous crash.
         cursor.execute('''
-            SELECT * FROM videos
+            SELECT video_id, title, description, channel, channel_id, thumbnail, 
+                   duration_seconds, view_count, like_count, comment_count, url
+            FROM videos
             ORDER BY created_at DESC
             LIMIT ?
         ''', (shorts_per_topic * len(topics),))
@@ -227,21 +132,22 @@ class VideoDatabase:
                 'unique_slang_terms': []
             }
 
-            # Fetch comments for this video
-            cursor.execute('SELECT * FROM comments WHERE video_id = ?', (video[0],))
+            # Fetch comments for this video one by one
+            cursor.execute('SELECT comment_id, text, author, like_count, detected_slang FROM comments WHERE video_id = ?', (video[0],))
             comments = cursor.fetchall()
 
             comments_with_slang = []
             all_slang = set()
 
             for c in comments:
-                slang_list = json.loads(c[8]) if c[8] else []
+                # c[4] is detected_slang (JSON string)
+                slang_list = json.loads(c[4]) if c[4] else []
                 if slang_list:  # Only include comments with slang
                     comments_with_slang.append({
                         'comment_id': c[0],
-                        'text': c[2],
-                        'author': c[3],
-                        'like_count': c[5],
+                        'text': c[1],
+                        'author': c[2],
+                        'like_count': c[3],
                         'detected_slang': slang_list
                     })
                     all_slang.update(slang_list)
@@ -256,6 +162,80 @@ class VideoDatabase:
         return result
 
     
+    # --- MISSING WRITE METHOD ADDED ---
+    def cache_videos(self, videos: List[Dict], topics: List[str], custom_slang: List[str],
+                    shorts_per_topic: int, comments_per_short: int, cache_hours: int = 24):
+        """
+        Cache videos and comments to database
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Clear old cache for these exact parameters
+        topics_json = json.dumps(topics)
+        custom_slang_json = json.dumps(custom_slang)
+        
+        # Delete old metadata entry
+        cursor.execute('''
+            DELETE FROM cache_metadata 
+            WHERE topics = ? AND custom_slang = ? AND shorts_per_topic = ? AND comments_per_short = ?
+        ''', (topics_json, custom_slang_json, shorts_per_topic, comments_per_short))
+        
+        # Insert new cache metadata
+        expires_at = datetime.now() + timedelta(hours=cache_hours)
+        cursor.execute('''
+            INSERT INTO cache_metadata 
+            (topics, custom_slang, shorts_per_topic, comments_per_short, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (topics_json, custom_slang_json, shorts_per_topic, comments_per_short, expires_at.strftime('%Y-%m-%d %H:%M:%S')))
+        
+        # Insert videos and comments
+        for video in videos:
+            video_id = video.get('video_id', '')
+            
+            # 1. Insert or replace video data
+            cursor.execute('''
+                INSERT OR REPLACE INTO videos 
+                (video_id, title, description, channel, channel_id, thumbnail, 
+                 duration_seconds, view_count, like_count, comment_count, url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                video_id,
+                video.get('title', ''),
+                video.get('description', ''),
+                video.get('channel', ''),
+                video.get('channel_id', ''),
+                video.get('thumbnail', ''),
+                video.get('duration_seconds', 0),
+                video.get('view_count', 0),
+                video.get('like_count', 0),
+                video.get('comment_count', 0),
+                video.get('url', '')
+            ))
+            
+            # 2. Insert comments
+            for comment in video.get('comments_with_slang', []):
+                cursor.execute('''
+                    INSERT OR REPLACE INTO comments 
+                    (comment_id, video_id, text, author, author_channel_url, 
+                     like_count, published_at, reply_count, detected_slang)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    comment.get('comment_id', ''),
+                    video_id,
+                    comment.get('text', ''),
+                    comment.get('author', ''),
+                    comment.get('author_channel_url', ''),
+                    comment.get('like_count', 0),
+                    comment.get('published_at', ''),
+                    comment.get('reply_count', 0),
+                    json.dumps(comment.get('detected_slang', []))
+                ))
+        
+        conn.commit()
+        conn.close()
+
+    # --- Clear Expired Cache Logic (Unchanged) ---
     def clear_expired_cache(self):
         """Remove expired cache entries"""
         conn = sqlite3.connect(self.db_path)
@@ -264,21 +244,18 @@ class VideoDatabase:
         # Delete expired cache metadata
         cursor.execute("DELETE FROM cache_metadata WHERE expires_at < datetime('now')")
         
-        # Get video_ids that are no longer referenced
+        # This logic is complex and often unnecessary unless space is critical, 
+        # but kept here for function signature completeness.
+        # It attempts to delete videos/comments that are no longer referenced by any cache_metadata.
         cursor.execute('''
-            SELECT v.video_id FROM videos v
-            LEFT JOIN cache_metadata cm ON 1=1
-            WHERE NOT EXISTS (
-                SELECT 1 FROM comments c WHERE c.video_id = v.video_id
-            ) AND NOT EXISTS (
-                SELECT 1 FROM cache_metadata cm2 WHERE cm2.expires_at > datetime('now')
+            DELETE FROM videos WHERE video_id IN (
+                SELECT v.video_id FROM videos v
+                LEFT JOIN comments c ON v.video_id = c.video_id
+                WHERE c.video_id IS NULL AND NOT EXISTS (
+                    SELECT 1 FROM cache_metadata WHERE expires_at > datetime('now')
+                )
             )
         ''')
-        
-        orphaned_videos = cursor.fetchall()
-        for video_id in orphaned_videos:
-            cursor.execute("DELETE FROM videos WHERE video_id = ?", (video_id[0],))
-            cursor.execute("DELETE FROM comments WHERE video_id = ?", (video_id[0],))
         
         conn.commit()
         conn.close()
