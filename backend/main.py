@@ -73,6 +73,7 @@ class EvaluateRequest(BaseModel):
     userComment: str
     targetLanguage: str
     videoViewCount: int
+    availableSlang: List[str] = []  # Slang terms available in the video
 
 class EvaluateResponse(BaseModel):
     score: int
@@ -91,11 +92,15 @@ class RespondRequest(BaseModel):
     correction: str
     videoTitle: str
     targetLanguage: str
+    availableSlang: List[str] = []  # Slang available in the video
 
-class RespondResponse(BaseModel):
+class AIResponse(BaseModel):
     aiComment: str
     authorName: str
     likes: int
+
+class RespondResponse(BaseModel):
+    responses: List[AIResponse]
 
 
 # Stage 1: Evaluate user comment and return score with social validation
@@ -118,33 +123,36 @@ def evaluate_comment(request: EvaluateRequest):
             video_description=request.videoDescription,
             user_comment=request.userComment,
             target_language=request.targetLanguage,
-            video_view_count=request.videoViewCount
+            video_view_count=request.videoViewCount,
+            available_slang=request.availableSlang
         )
         return evaluation
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
 
 
-# Stage 2: Generate AI response with roast-with-love personality
+# Stage 2: Generate multiple AI responses with roast-with-love personalities
 @app.post("/api/respond", response_model=RespondResponse)
 def generate_ai_response(request: RespondRequest):
     """
-    Generate a Gen Z style AI response to user's comment.
+    Generate multiple Gen Z style AI responses to user's comment.
 
     Returns:
-        - aiComment: TikTok-style roast-with-love feedback
-        - authorName: Random AI coach personality name
-        - likes: Random engagement count (10-500)
+        - responses: List of 2-4 AI responses, each with:
+            - aiComment: TikTok-style roast-with-love feedback
+            - authorName: Groq-generated Gen Z username
+            - likes: Random engagement count (10-500)
     """
     try:
-        response = groq_evaluator.generate_response(
+        responses = groq_evaluator.generate_multiple_responses(
             user_comment=request.userComment,
             score=request.score,
             mistakes=request.mistakes,
             correction=request.correction,
             video_title=request.videoTitle,
-            target_language=request.targetLanguage
+            target_language=request.targetLanguage,
+            available_slang=request.availableSlang
         )
-        return response
+        return {"responses": responses}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Response generation error: {str(e)}")

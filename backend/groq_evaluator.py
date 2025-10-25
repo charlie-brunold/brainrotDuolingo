@@ -42,7 +42,8 @@ class GroqCommentEvaluator:
         video_description: str,
         user_comment: str,
         target_language: str,
-        video_view_count: int
+        video_view_count: int,
+        available_slang: List[str] = None
     ) -> Dict:
         """
         Evaluate a user's comment with detailed scoring and feedback.
@@ -53,16 +54,25 @@ class GroqCommentEvaluator:
             user_comment: The user's comment to evaluate
             target_language: Language being learned (e.g., "English", "Spanish")
             video_view_count: Number of views on the video (for like calculation)
+            available_slang: List of slang terms available in the video
 
         Returns:
             Dictionary with score, likes, feedback, and detailed breakdown
         """
-        # Construct evaluation prompt
+        # Detect which slang terms user attempted to use
+        if available_slang is None:
+            available_slang = []
+
+        detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
+
+        # Construct evaluation prompt with slang focus
         prompt = self._build_evaluation_prompt(
             video_title,
             video_description,
             user_comment,
-            target_language
+            target_language,
+            available_slang,
+            detected_slang
         )
 
         try:
@@ -209,29 +219,96 @@ class GroqCommentEvaluator:
         likes = int(video_view_count * percentage)
         return max(1, likes)
 
+    def _detect_slang_in_comment(self, user_comment: str, available_slang: List[str]) -> List[str]:
+        """
+        Detect which slang terms from the available list appear in the user's comment.
+        Uses word boundary matching to avoid false positives.
+
+        Args:
+            user_comment: The user's comment text
+            available_slang: List of slang terms to check for
+
+        Returns:
+            List of detected slang terms
+        """
+        import re
+        detected = []
+        comment_lower = user_comment.lower()
+
+        for slang in available_slang:
+            # Use word boundary regex to match whole words only
+            pattern = r'\b' + re.escape(slang.lower()) + r'\b'
+            if re.search(pattern, comment_lower):
+                detected.append(slang)
+
+        return detected
+
     def _build_evaluation_prompt(
         self,
         video_title: str,
         video_description: str,
         user_comment: str,
-        target_language: str
+        target_language: str,
+        available_slang: List[str] = None,
+        detected_slang: List[str] = None
     ) -> str:
-        """Build the evaluation prompt following design doc specifications."""
-        return f"""You are a language learning evaluator. Analyze this user's comment.
+        """Build the evaluation prompt with slang focus when applicable."""
+
+        if available_slang is None:
+            available_slang = []
+        if detected_slang is None:
+            detected_slang = []
+
+        # Build slang context section
+        slang_context = ""
+        if available_slang:
+            slang_list = ", ".join(available_slang)
+            slang_context = f"\n[Slang Context]\nAvailable slang from video: {slang_list}\n"
+
+            if detected_slang:
+                detected_list = ", ".join(detected_slang)
+                slang_context += f"User attempted to use: {detected_list}\n"
+            else:
+                slang_context += "User did not use any of the available slang terms.\n"
+
+        # Adjust evaluation criteria based on slang usage
+        if detected_slang:
+            evaluation_criteria = """[Evaluation Criteria]
+Score 0-100 based on:
+1. SLANG USAGE CORRECTNESS (60% weight) - PRIMARY FOCUS
+   - Is the slang term used in the correct context?
+   - Does it follow proper idiomatic usage?
+   - Is it grammatically integrated correctly?
+2. General grammar/accuracy (25% weight) - Supporting language quality
+3. Relevance to video (15% weight) - Context appropriateness
+
+IMPORTANT: Focus heavily on whether the slang is used correctly. Wrong slang usage should significantly lower the score."""
+        elif available_slang:
+            evaluation_criteria = """[Evaluation Criteria]
+Score 0-100 based on:
+1. Grammar/accuracy (50% weight) - Language correctness
+2. Relevance to video (30% weight) - Context appropriateness
+3. Vocabulary/naturalness (20% weight) - General expression
+
+NOTE: User had slang terms available but chose not to use them. This is okay, but mention in goodParts if they could have used slang to be more engaging."""
+        else:
+            evaluation_criteria = """[Evaluation Criteria]
+Score 0-100 based on:
+1. Grammar/accuracy (50% weight) - Most important for language learning
+2. Relevance to video (30% weight) - Ensures comprehension
+3. Vocabulary/naturalness (20% weight) - Rewards idiomatic usage"""
+
+        return f"""You are a language learning evaluator specializing in slang and idiomatic expressions. Analyze this user's comment.
 
 [Video Context]
 Video Title: {video_title}
 Video Description: {video_description}
-
+{slang_context}
 [User Input]
 Comment: {user_comment}
 Target Language: {target_language}
 
-[Evaluation Criteria]
-Score 0-100 based on:
-1. Grammar/accuracy (50% weight) - Most important for language learning
-2. Relevance to video (30% weight) - Ensures comprehension, not just translation
-3. Vocabulary/naturalness (20% weight) - Rewards idiomatic usage
+{evaluation_criteria}
 
 [Output Format]
 Return ONLY valid JSON with no markdown formatting, no code blocks, no backticks:
@@ -249,8 +326,9 @@ CRITICAL JSON RULES:
 1. Return ONLY the JSON object - no markdown, no code blocks, no backticks
 2. Each array item MUST be a properly quoted JSON string
 3. Inside array strings, avoid using quotes - instead of "word" should be "correction", write: word should be correction
-4. Example mistakes format: ["helpfull should be helpful", "learning should be learned"]
-5. All strings must be wrapped in double quotes per JSON spec"""
+4. Example mistakes format: ["fire used as verb instead of adjective", "learning should be learned"]
+5. All strings must be wrapped in double quotes per JSON spec
+6. If slang was attempted, focus mistakes/goodParts on slang usage correctness"""
 
     def _build_response_prompt(
         self,
@@ -432,3 +510,235 @@ CRITICAL JSON RULES:
             Random author name from predefined list
         """
         return random.choice(self.ai_authors)
+
+    def generate_random_username(self) -> str:
+        """
+        Generate a random Gen Z style username using Groq AI.
+
+        Returns:
+            A creative, Gen Z style username
+        """
+        prompt = """Generate a single creative Gen Z/TikTok style username.
+
+Examples of the style:
+- SkibidiKing
+- RizzMaster
+- SigmaGrinder
+- BussinVibes
+- NoCapLegend
+- GlazingGuru
+- AuraHunter
+- MoggingChamp
+- OhioEnjoyer
+- MewingExpert
+
+Requirements:
+- One word or CamelCase compound (no spaces, underscores, or numbers)
+- Gen Z slang terms encouraged
+- Creative and unique
+- 8-15 characters
+
+Output ONLY the username with no explanation or punctuation."""
+
+        try:
+            response = self.client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }],
+                model=self.model,
+                temperature=0.95,  # High creativity for variety
+                max_tokens=20      # Just need the username
+            )
+
+            username = response.choices[0].message.content.strip()
+            # Remove any quotes or extra characters
+            username = username.replace('"', '').replace("'", '').strip()
+
+            # Validate it's reasonable (not empty, not too long)
+            if username and len(username) <= 20 and username.isalnum():
+                return username
+            else:
+                # Fallback to predefined list if invalid
+                return self._get_random_ai_author()
+
+        except Exception as e:
+            print(f"Error generating username: {e}")
+            # Fallback to predefined list
+            return self._get_random_ai_author()
+
+    def generate_multiple_responses(
+        self,
+        user_comment: str,
+        score: int,
+        mistakes: List[str],
+        correction: str,
+        video_title: str,
+        target_language: str,
+        available_slang: List[str] = None,
+        num_responses: int = None
+    ) -> List[Dict]:
+        """
+        Generate multiple AI responses from different "users" with varied perspectives.
+
+        Args:
+            user_comment: The user's original comment
+            score: The evaluation score (0-100)
+            mistakes: List of identified mistakes
+            correction: The corrected version of the comment
+            video_title: Title of the video
+            target_language: Language being learned
+            available_slang: Slang terms available in the video
+            num_responses: Number of responses to generate (2-4, random if None)
+
+        Returns:
+            List of dictionaries with aiComment, authorName, and likes
+        """
+        # Detect slang usage
+        if available_slang is None:
+            available_slang = []
+
+        detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
+
+        # Randomly choose 2-4 responses if not specified
+        if num_responses is None:
+            num_responses = random.randint(2, 4)
+        else:
+            num_responses = max(2, min(4, num_responses))  # Clamp between 2-4
+
+        responses = []
+
+        for i in range(num_responses):
+            try:
+                # Generate username first
+                username = self.generate_random_username()
+
+                # Construct prompt with variation for each response
+                prompt = self._build_varied_response_prompt(
+                    user_comment,
+                    score,
+                    mistakes,
+                    correction,
+                    video_title,
+                    target_language,
+                    available_slang,
+                    detected_slang,
+                    response_index=i
+                )
+
+                # Call Groq for this response
+                response = self.client.chat.completions.create(
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }],
+                    model=self.model,
+                    temperature=0.9 + (i * 0.02),  # Slightly vary temperature for diversity
+                    max_tokens=200
+                )
+
+                ai_comment = response.choices[0].message.content.strip()
+                ai_likes = random.randint(10, 500)
+
+                responses.append({
+                    "aiComment": ai_comment,
+                    "authorName": username,
+                    "likes": ai_likes
+                })
+
+            except Exception as e:
+                print(f"Error generating response {i+1}: {e}")
+                # Add fallback response
+                responses.append({
+                    "aiComment": "Couldn't load this comment rn 😅",
+                    "authorName": self._get_random_ai_author(),
+                    "likes": random.randint(5, 50)
+                })
+
+        return responses
+
+    def _build_varied_response_prompt(
+        self,
+        user_comment: str,
+        score: int,
+        mistakes: List[str],
+        correction: str,
+        video_title: str,
+        target_language: str,
+        available_slang: List[str],
+        detected_slang: List[str],
+        response_index: int
+    ) -> str:
+        """
+        Build a response prompt with variation based on the response index.
+        Different "personalities" will have different focuses.
+        """
+        mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
+
+        # Build slang context
+        slang_context = ""
+        if detected_slang:
+            slang_list = ", ".join(detected_slang)
+            slang_context = f"\n- Slang they used: {slang_list}"
+        elif available_slang:
+            slang_list = ", ".join(available_slang[:3])  # Show first 3
+            slang_context = f"\n- Available slang they could have used: {slang_list}"
+
+        # Define different personality focuses with slang awareness
+        if detected_slang:
+            personalities = [
+                # Response 0: Supportive friend focused on slang
+                "You're encouraging and specifically comment on their slang usage. If they used it right, hype them up. If wrong, gently correct.",
+                # Response 1: Playful roaster about slang
+                "You're playful and will roast slang mistakes hard but funny. If they nailed it, show respect.",
+                # Response 2: Impressed by slang attempt
+                "You're surprised they tried using slang. Comment on whether it worked or not.",
+                # Response 3: Casual slang validator
+                "You're super casual, just dropping a quick note about their slang usage like it's no big deal."
+            ]
+        else:
+            personalities = [
+                # Response 0: Gentle suggestion to try slang
+                "You're encouraging. Mention they could try using the slang from the video.",
+                # Response 1: Playful about missed slang opportunity
+                "You're playful. Point out they missed a chance to use some fire slang.",
+                # Response 2: General commenter
+                "You're just a regular commenter reacting to what they said.",
+                # Response 3: Casual observer
+                "You're super casual, just dropping a quick reaction."
+            ]
+
+        personality = personalities[response_index % len(personalities)]
+
+        return f"""You're someone who's fluent in {target_language} scrolling through comments. {personality}
+
+Context:
+- Post: "{video_title}"
+- Their comment: "{user_comment}"
+- Mistakes: {mistakes_text}
+- Correction: {correction}
+- Their score: {score}/100{slang_context}
+
+Write a SHORT comment (1-2 sentences max) responding to their comment. Keep it authentic - you're just another person in the comments, not a teacher.
+
+Style examples for CORRECT slang usage:
+"yo you used 'bussin' perfectly 🔥"
+"okay the rizz comment was actually fire"
+"nah you got that slang right fr fr"
+
+Style examples for WRONG slang usage:
+"bro 'fire' is an adjective not a verb 💀"
+"'cooked' means ruined, not success lmao"
+"almost had it but 'bussin' is for food/vibes not people"
+
+Style examples for NO slang used:
+"coulda said this was bussin tbh"
+"missed chance to use some fire slang ngl"
+"solid comment but try the slang next time"
+
+General style:
+"*learned, but yeah same"
+"that's clean actually"
+"okay this is lowkey impressive"
+
+Just respond with the comment. No explanation, no quotes."""

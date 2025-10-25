@@ -141,6 +141,7 @@ export default function BrainrotTikTok({ shortsData }) {
           userComment: commentText,
           targetLanguage: 'English', // TODO: Make this configurable
           videoViewCount: currentVideo.view_count || 0,
+          availableSlang: currentVideo.unique_slang_terms || [],
         }),
       });
 
@@ -170,6 +171,7 @@ export default function BrainrotTikTok({ shortsData }) {
           correction: evaluation.correction || '',
           videoTitle: currentVideo.title || 'Untitled Video',
           targetLanguage: 'English', // TODO: Make this configurable
+          availableSlang: currentVideo.unique_slang_terms || [],
         }),
       });
 
@@ -178,7 +180,8 @@ export default function BrainrotTikTok({ shortsData }) {
       }
 
       const data = await response.json();
-      return data;
+      // data now contains { responses: [{aiComment, authorName, likes}, ...] }
+      return data.responses;
     } catch (error) {
       console.error('Error generating AI response:', error);
       throw error;
@@ -194,17 +197,17 @@ export default function BrainrotTikTok({ shortsData }) {
       // Step 1: Evaluate the comment with AI
       const evaluation = await evaluateCommentWithAI(comment);
 
-      // Step 2: Generate AI response
-      const aiResponse = await generateAIResponse(comment, evaluation);
+      // Step 2: Generate multiple AI responses
+      const aiResponses = await generateAIResponse(comment, evaluation);
 
-      // Step 3: Create comment with AI response
+      // Step 3: Create comment with AI responses
       const newComment = {
         id: Date.now(),
         text: comment,
         user: 'You',
         likes: evaluation.likes,
         evaluation,
-        aiResponses: [aiResponse.aiComment] // Array for consistency with old structure
+        aiResponses: aiResponses // Array of {aiComment, authorName, likes}
       };
 
       setUserComments(prev => [newComment, ...prev]);
@@ -462,12 +465,14 @@ export default function BrainrotTikTok({ shortsData }) {
                         </div>
                         <div className="flex-1">
                           <div className="text-white font-semibold text-sm">
-                            {idx === 0 ? 'BrainrotBot' : idx === 1 ? 'SkibidiKing' : 'SigmaChad'}
+                            {response.authorName || response}
                           </div>
-                          <div className="text-white/90 text-sm mt-1">{response}</div>
+                          <div className="text-white/90 text-sm mt-1">
+                            {response.aiComment || response}
+                          </div>
                           <div className="flex gap-4 mt-2">
                             <button className="text-gray-400 text-xs flex items-center gap-1">
-                              <Heart className="w-3 h-3" /> {Math.floor(Math.random() * 50)}
+                              <Heart className="w-3 h-3" /> {response.likes || Math.floor(Math.random() * 50)}
                             </button>
                             <button className="text-gray-400 text-xs">Reply</button>
                           </div>
