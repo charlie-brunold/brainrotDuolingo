@@ -252,6 +252,29 @@ def get_stats():
     }
 
 
+
+# Stage 3: Explain YouTube comments with slang translations
+@app.post("/api/explain-comment", response_model=ExplainCommentResponse)
+def explain_comment(request: ExplainCommentRequest):
+    """
+    Explain a YouTube comment by translating it to simpler language
+    and breaking down each slang term.
+
+    Returns:
+        - translation: The comment rewritten in simple language without slang
+        - slangBreakdown: Array of objects with term, definition, and usage
+    """
+    try:
+        explanation = groq_evaluator.explain_comment(
+            comment_text=request.commentText,
+            video_title=request.videoTitle,
+            video_description=request.videoDescription,
+            detected_slang=request.detectedSlang
+        )
+        return explanation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "="*60)

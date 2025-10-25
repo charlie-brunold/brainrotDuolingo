@@ -20,7 +20,7 @@ class GroqCommentEvaluator:
             api_key: Groq API key
         """
         self.client = Groq(api_key=api_key)
-        self.model = "llama-3.3-70b-versatile"
+        self.model = "openai/gpt-oss-20b"
 
         # AI personality author names for responses
         self.ai_authors = [
@@ -761,3 +761,105 @@ Examples of natural responses:
 "that's not how you use that slang lol"
 
 Just write the comment (1-2 sentences max). Nothing else."""
+
+    def explain_comment(
+        self,
+        comment_text: str,
+        video_title: str,
+        video_description: str,
+        detected_slang: List[str] = None
+    ) -> Dict:
+        """
+        Explain a YouTube comment by translating it to simpler language
+        and breaking down each slang term with definitions and usage examples.
+
+        Args:
+            comment_text: The comment to explain
+            video_title: Title of the video for context
+            video_description: Description of the video for context
+            detected_slang: List of slang terms detected in the comment
+
+        Returns:
+            Dictionary with translation and slangBreakdown
+        """
+        if detected_slang is None:
+            detected_slang = []
+
+        prompt = self._build_explanation_prompt(
+            comment_text,
+            video_title,
+            video_description,
+            detected_slang
+        )
+
+        try:
+            response = self.client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }],
+                model=self.model,
+                temperature=0.7,
+                max_tokens=600
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            explanation_data = self._parse_json_response(response_text)
+
+            return explanation_data
+
+        except Exception as e:
+            print(f"Error in explain_comment: {e}")
+            return {
+                "translation": "Could not generate explanation",
+                "slangBreakdown": []
+            }
+
+    def _build_explanation_prompt(
+        self,
+        comment_text: str,
+        video_title: str,
+        video_description: str,
+        detected_slang: List[str]
+    ) -> str:
+        """Build the prompt for explaining a comment with slang."""
+
+        slang_list = ", ".join(detected_slang) if detected_slang else "none detected"
+
+        return f"""You're helping someone learn slang by explaining a YouTube comment.
+
+[Video Context]
+Video Title: {video_title}
+Video Description: {video_description}
+
+[Comment to Explain]
+"{comment_text}"
+
+Detected Slang Terms: {slang_list}
+
+Your task:
+1. Translate the comment into simple, clear language without any slang
+2. For each slang term, provide a definition and show how it's used in this specific context
+
+Keep it concise - this will be shown in a small tooltip.
+
+[Output Format]
+Return ONLY valid JSON with no markdown formatting, no code blocks, no backticks:
+{{
+  "translation": "<the comment rewritten in simple language without slang>",
+  "slangBreakdown": [
+    {{
+      "term": "<slang term>",
+      "definition": "<what it means>",
+      "usage": "<how it's used in this comment>"
+    }}
+  ]
+}}
+
+CRITICAL JSON RULES:
+1. Return ONLY the JSON object - no markdown, no code blocks, no backticks
+2. Keep translation to 2-3 sentences max
+3. Keep each definition to 1 sentence
+4. Keep each usage to 1 sentence showing context
+5. All strings must be wrapped in double quotes
+6. If no slang detected, return empty slangBreakdown array"""
