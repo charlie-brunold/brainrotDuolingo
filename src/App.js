@@ -47,6 +47,12 @@ function App() {
       setUserConfig(null);
     }
   };
+   // Handle back navigation
+  const handleBackToHome = () => {
+    setShowHomePage(true);
+    setUserConfig(null);
+    setShortsData(null);
+  };
 
   // Show homepage
   if (showHomePage) {
@@ -54,52 +60,86 @@ function App() {
   }
 
   // Show loading screen while fetching
-  if (userConfig && !shortsData) {
-    return (
-      <div className="min-h-screen w-full bg-black flex items-center justify-center p-4">
-        <div className="text-center">
-          {/* Animated loading spinner */}
-          <div className="relative inline-block mb-6">
-            <div className="w-20 h-20 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-3xl">🎬</span>
-            </div>
-          </div>
-          
-          {/* Loading text */}
-          <h2 className="text-white text-2xl font-bold mb-3">
-            Fetching Videos...
-          </h2>
-          <p className="text-gray-400 text-sm mb-6">
-            Loading {userConfig.topics.join(', ')} videos with slang comments
-          </p>
-          
-          {/* Progress dots animation */}
-          <div className="flex justify-center gap-2">
-            <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse"></div>
-            <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+if (userConfig && !shortsData) {
+  return (
+    <div className="min-h-screen w-full bg-black flex items-center justify-center p-4">
+      {/* Back button */}
+      <button
+        onClick={handleBackToHome}
+        className="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-lg transition-colors backdrop-blur-sm"
+      >
+        <svg 
+          className="w-5 h-5" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        <span className="text-sm font-medium">Back</span>
+      </button>
+
+      <div className="text-center">
+        {/* Animated loading spinner */}
+        <div className="relative inline-block mb-6">
+          <div className="w-20 h-20 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-3xl">🎬</span>
           </div>
         </div>
+        
+        {/* Loading text */}
+        <h2 className="text-white text-2xl font-bold mb-3">
+          Fetching Videos...
+        </h2>
+        <p className="text-gray-400 text-sm mb-6">
+          Loading {userConfig.topics.join(', ')} videos with slang comments
+        </p>
+        
+        {/* Progress dots animation */}
+        <div className="flex justify-center gap-2">
+          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse"></div>
+          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // Show videos
   if (shortsData) {
     return (
       <div className="relative">
+        {/* Back button */}
+        <button
+          onClick={handleBackToHome}
+          className="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-lg transition-colors backdrop-blur-sm"
+        >
+          <svg 
+            className="w-5 h-5" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </button>
+
         {/* Original TikTok Component */}
-        <BrainrotTikTok 
-          shortsData={shortsData}
-          onBackToHome={() => {
-            setShowHomePage(true);
-            setUserConfig(null);
-            setShortsData(null);
-          }}
-        />
+        <BrainrotTikTok shortsData={shortsData} />
         
-        {/* NEW: Add the refresh button */}
+        {/* Refresh button */}
         <RefreshSlangButton 
           topics={userConfig?.topics || ['gaming', 'food review', 'dance']}
           apiUrl="http://localhost:3001"
