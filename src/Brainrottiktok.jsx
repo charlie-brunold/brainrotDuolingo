@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
 import MySlang from './Myslang.jsx';
 
@@ -476,46 +477,62 @@ export default function BrainrotTikTok({ shortsData }) {
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              className="absolute inset-0"
+              className="absolute inset-0 overflow-hidden"
             >
-              {/* Render only the current video */}
-              {VIDEOS.map((video, index) => {
-                const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
+              {/* Persistent sliding window - keeps adjacent videos mounted */}
+              {[currentVideoIndex - 1, currentVideoIndex, currentVideoIndex + 1].map((index, position) => {
+                // Skip if index is out of bounds
+                if (index < 0 || index >= VIDEOS.length) return null;
+
+                const video = VIDEOS[index];
+                const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1] : null;
+                const isCurrent = index === currentVideoIndex;
+
+                // Calculate position: previous video (-100%), current (0%), next (+100%)
+                const offsetPosition = position - 1; // -1, 0, or 1
 
                 return (
-                  <div
+                  <motion.div
                     key={index}
-                    className="absolute inset-0 w-full h-full flex items-center justify-center bg-black transition-opacity duration-500"
-                    style={{
-                      opacity: index === currentVideoIndex ? 1 : 0,
-                      pointerEvents: index === currentVideoIndex ? 'auto' : 'none',
-                      zIndex: index === currentVideoIndex ? 1 : 0
+                    className="absolute inset-0 w-full h-full"
+                    initial={false}
+                    animate={{
+                      y: `${offsetPosition * 100}%`,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 300,
+                      damping: 30,
+                      mass: 0.8
                     }}
                   >
-                    {videoIdForIndex ? (
-                      <iframe
-                        width="100%"
-                        height="100%"
-                        src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=1&controls=1&rel=0&modestbranding=1`}
-                        title={video.title}
-                        frameBorder="0"
-                        allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                        className="absolute inset-0"
-                        style={{ objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div className="text-center text-white p-8">
-                        <img
-                          src={video.thumbnail}
-                          alt={video.title}
-                          className="max-w-full max-h-full rounded-lg mb-4"
+                    <div className="w-full h-full flex items-center justify-center bg-black">
+                      {videoIdForIndex ? (
+                        <iframe
+                          key={`iframe-${index}`}
+                          width="100%"
+                          height="100%"
+                          src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=${isCurrent ? 1 : 0}&controls=1&rel=0&modestbranding=1`}
+                          title={video.title}
+                          frameBorder="0"
+                          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          className="absolute inset-0"
+                          style={{ objectFit: 'cover' }}
                         />
-                        <div className="text-2xl font-bold mb-2">{video.title}</div>
-                        <div className="text-lg opacity-80">@{video.channel}</div>
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        <div className="text-center text-white p-8">
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title}
+                            className="max-w-full max-h-full rounded-lg mb-4"
+                          />
+                          <div className="text-2xl font-bold mb-2">{video.title}</div>
+                          <div className="text-lg opacity-80">@{video.channel}</div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
                 );
               })}
             </div>
