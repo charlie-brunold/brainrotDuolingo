@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles } from 'lucide-react';
 
+// --- SLANG TERMS (Static Data) ---
 const SLANG_TERMS = {
   'cook': { definition: 'To do something very well, to excel', example: 'He really cooked with that comment' },
   'cooked': { definition: 'Ruined, done for, or extremely tired', example: 'Bro is cooked after that fail' },
@@ -36,38 +37,28 @@ export default function BrainrotTikTok({ shortsData }) {
   const [suggestedSlang, setSuggestedSlang] = useState([]);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [touchStart, setTouchStart] = useState(0); // NEW: Track Y position on touch start
+  const [touchEnd, setTouchEnd] = useState(0);   // NEW: Track Y position on touch end
   const containerRef = useRef(null);
-
+  
   // Use provided shortsData or fallback
   const VIDEOS = shortsData || [];
   const currentVideo = VIDEOS[currentVideoIndex];
+  const videoId = currentVideo?.url ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
 
-  // Extract video ID from YouTube URL
-  const extractVideoId = (url) => {
-    if (!url) return null;
-    const match = url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-    return match ? match[1] : null;
-  };
 
-  const videoId = currentVideo ? extractVideoId(currentVideo.url) : null;
+  // --- Helper Functions ---
 
-  // Format numbers for display
   const formatNumber = (num) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return num?.toString() || '0';
   };
 
-  useEffect(() => {
-    if (currentVideo && currentVideo.unique_slang_terms) {
-      const suggestions = currentVideo.unique_slang_terms.slice(0, 3);
-      setSuggestedSlang(suggestions);
-    }
-  }, [currentVideoIndex, currentVideo]);
-
   const scrollToVideo = (index) => {
     if (index >= 0 && index < VIDEOS.length) {
       setCurrentVideoIndex(index);
+      // Reset state for the new video
       setShowComments(false);
       setUserComments([]);
       setComment('');
@@ -75,14 +66,60 @@ export default function BrainrotTikTok({ shortsData }) {
     }
   };
 
+  // --- Scroll/Swipe Handlers (FIXED/IMPROVED) ---
+  
   const handleWheel = (e) => {
-    if (showComments) return;
-    if (e.deltaY > 0) {
+    // 1. If comments are open, close them on the first scroll event.
+    if (showComments) {
+        setShowComments(false);
+        return; // Prevents accidental video skip on closing gesture
+    } 
+
+    // 2. Switch video based on wheel direction
+    if (e.deltaY > 0) { // Scroll Down
       scrollToVideo(currentVideoIndex + 1);
-    } else {
+    } else { // Scroll Up
       scrollToVideo(currentVideoIndex - 1);
     }
   };
+
+  const handleTouchStart = (e) => {
+    if (showComments) return;
+    setTouchStart(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    if (showComments) return;
+    setTouchEnd(e.targetTouches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (showComments) return;
+    const SWIPE_THRESHOLD = 50; // Minimum vertical distance for a swipe
+
+    // Swiping UP (Start Y > End Y)
+    if (touchStart - touchEnd > SWIPE_THRESHOLD) {
+      scrollToVideo(currentVideoIndex + 1);
+    }
+
+    // Swiping DOWN (Start Y < End Y)
+    if (touchStart - touchEnd < -SWIPE_THRESHOLD) {
+      scrollToVideo(currentVideoIndex - 1);
+    }
+    
+    // Reset touch state
+    setTouchStart(0);
+    setTouchEnd(0);
+  };
+
+  // --- Comment Logic ---
+
+  useEffect(() => {
+    if (currentVideo && currentVideo.unique_slang_terms) {
+      const suggestions = currentVideo.unique_slang_terms.slice(0, 3);
+      setSuggestedSlang(suggestions);
+    }
+  }, [currentVideoIndex, currentVideo]);
 
   const addSlangToComment = (slang) => {
     setComment(prev => prev + (prev ? ' ' : '') + slang + ' ');
@@ -99,7 +136,8 @@ export default function BrainrotTikTok({ shortsData }) {
       if (SLANG_TERMS[cleanWord]) {
         usedSlang.push(cleanWord);
         
-        const isCorrectContext = Math.random() > 0.3;
+        // Mock usage correctness check
+        const isCorrectContext = Math.random() > 0.3; 
         if (isCorrectContext) {
           correctUsage.push(cleanWord);
         } else {
@@ -113,39 +151,25 @@ export default function BrainrotTikTok({ shortsData }) {
 
   const generateAIResponses = (commentText, analysis) => {
     const positiveResponses = [
-      "fr fr no cap 💯",
-      "You ate with this comment 🔥",
-      "This is so real",
-      "Facts bro 👑",
-      "Based comment",
-      "W comment section",
-      "Bro is spitting facts",
+      "fr fr no cap 💯", "You ate with this comment 🔥", "This is so real", 
+      "Facts bro 👑", "Based comment", "W comment section", "Bro is spitting facts", 
       "You're cooking with this one 🔥",
     ];
-
     const negativeResponses = [
-      "Nah you're cooked for this take 💀",
-      "Ratio 📊",
-      "This ain't it chief",
-      "Mid comment ngl",
-      "Bro is not him 💀",
+      "Nah you're cooked for this take 💀", "Ratio 📊", "This ain't it chief", 
+      "Mid comment ngl", "Bro is not him 💀",
     ];
-
     const neutralResponses = [
-      "Interesting take 🤔",
-      "I see what you did there",
-      "Fair point tbh",
+      "Interesting take 🤔", "I see what you did there", "Fair point tbh", 
       "Valid but hear me out",
     ];
 
     const score = analysis.usedSlang.length > 0 ? (analysis.correctUsage.length / analysis.usedSlang.length) : 0.5;
-    
     const allResponses = [];
     
+    // Logic to select responses based on comment "score"
     if (score >= 0.7) {
-      for (let i = 0; i < 3; i++) {
-        allResponses.push(positiveResponses[Math.floor(Math.random() * positiveResponses.length)]);
-      }
+      for (let i = 0; i < 3; i++) allResponses.push(positiveResponses[Math.floor(Math.random() * positiveResponses.length)]);
     } else if (score >= 0.4) {
       for (let i = 0; i < 3; i++) {
         const pool = [...positiveResponses, ...neutralResponses];
@@ -158,7 +182,7 @@ export default function BrainrotTikTok({ shortsData }) {
       }
     }
 
-    return allResponses.filter((v, i, a) => a.indexOf(v) === i);
+    return allResponses.filter((v, i, a) => a.indexOf(v) === i); // Return unique responses
   };
 
   const handleSubmitComment = () => {
@@ -195,6 +219,8 @@ export default function BrainrotTikTok({ shortsData }) {
     setTimeout(() => setShowFeedback(false), 5000);
   };
 
+  // --- Render Logic ---
+
   if (!currentVideo) {
     return (
       <div className="h-screen w-full bg-black flex items-center justify-center">
@@ -208,10 +234,13 @@ export default function BrainrotTikTok({ shortsData }) {
   }
 
   return (
-    <div className="h-screen w-full bg-black overflow-hidden relative">
+    <div className="h-screen w-full bg-black relative"> {/* Removed overflow-y-auto */}
       <div
         ref={containerRef}
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart} // ADDED
+        onTouchMove={handleTouchMove}   // ADDED
+        onTouchEnd={handleTouchEnd}     // ADDED
         className="h-full w-full relative"
       >
         {/* Video Container with REAL YouTube Video */}
@@ -245,14 +274,14 @@ export default function BrainrotTikTok({ shortsData }) {
         <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-20">
           <button
             onClick={() => scrollToVideo(currentVideoIndex - 1)}
-            disabled={currentVideoIndex === 0}
+            disabled={currentVideoIndex === 0 || showComments} // Added showComments disable
             className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30"
           >
             <ChevronUp className="w-6 h-6 text-white" />
           </button>
           <button
             onClick={() => scrollToVideo(currentVideoIndex + 1)}
-            disabled={currentVideoIndex === VIDEOS.length - 1}
+            disabled={currentVideoIndex === VIDEOS.length - 1 || showComments} // Added showComments disable
             className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30"
           >
             <ChevronDown className="w-6 h-6 text-white" />
