@@ -171,15 +171,16 @@ class GroqCommentEvaluator:
     def calculate_view_based_likes(self, score: int, video_view_count: int) -> int:
         """
         Calculate likes as a percentage of video views based on score tier.
+        Uses realistic social media engagement rates.
 
         Score Tiers:
-        - 90-100: Super viral (15-20% of views)
-        - 80-89:  Viral (8-15% of views)
-        - 70-79:  Popular (4-8% of views)
-        - 60-69:  Above average (2-4% of views)
-        - 50-59:  Average (0.5-2% of views)
-        - 40-49:  Below average (0.1-0.5% of views)
-        - 0-39:   Poor (0.01-0.1% of views)
+        - 90-100: Super viral (0.01-0.1% of views)
+        - 80-89:  Viral (0.005-0.01% of views)
+        - 70-79:  Popular (0.001-0.005% of views)
+        - 60-69:  Above average (0.0005-0.001% of views)
+        - 50-59:  Average (0.0001-0.0005% of views)
+        - 40-49:  Below average (0.00005-0.0001% of views)
+        - 0-39:   Poor (0.00001-0.00005% of views)
 
         Args:
             score: Evaluation score (0-100)
@@ -188,21 +189,21 @@ class GroqCommentEvaluator:
         Returns:
             Calculated like count (minimum 1)
         """
-        # Define percentage ranges for each tier
+        # Define realistic percentage ranges for each tier
         if score >= 90:
-            percentage = random.uniform(0.15, 0.20)      # 15-20%
+            percentage = random.uniform(0.0001, 0.001)      # 0.01-0.1%
         elif score >= 80:
-            percentage = random.uniform(0.08, 0.15)      # 8-15%
+            percentage = random.uniform(0.00005, 0.0001)    # 0.005-0.01%
         elif score >= 70:
-            percentage = random.uniform(0.04, 0.08)      # 4-8%
+            percentage = random.uniform(0.00001, 0.00005)   # 0.001-0.005%
         elif score >= 60:
-            percentage = random.uniform(0.02, 0.04)      # 2-4%
+            percentage = random.uniform(0.000005, 0.00001)  # 0.0005-0.001%
         elif score >= 50:
-            percentage = random.uniform(0.005, 0.02)     # 0.5-2%
+            percentage = random.uniform(0.000001, 0.000005) # 0.0001-0.0005%
         elif score >= 40:
-            percentage = random.uniform(0.001, 0.005)    # 0.1-0.5%
+            percentage = random.uniform(0.0000005, 0.000001)  # 0.00005-0.0001%
         else:
-            percentage = random.uniform(0.0001, 0.001)   # 0.01-0.1%
+            percentage = random.uniform(0.0000001, 0.0000005) # 0.00001-0.00005%
 
         # Calculate likes and ensure minimum of 1
         likes = int(video_view_count * percentage)
@@ -263,7 +264,7 @@ CRITICAL JSON RULES:
         """Build the roast-with-love response prompt following design doc."""
         mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
 
-        return f"""You are a roasting language coach with Gen Z energy and TikTok vibes.
+        return f"""You are a witty language coach who comments like a real person on social media.
 
 [Context]
 The user commented on: "{video_title}"
@@ -278,22 +279,27 @@ Target language: {target_language}
 {correction}
 
 [Task]
-Write a SHORT (1-2 sentences max) TikTok-style comment that:
-1. Playfully roasts their mistakes (if score < 85)
-2. Gives a quick, actionable learning tip
-3. Uses emojis, slang, Gen Z speak
-4. Keeps it supportive but hilarious
+Write a SHORT (1-2 sentences max) witty response that sounds like an actual human:
+1. NEVER mention the score or numbers
+2. Point out mistakes in a clever, natural way (not forced)
+3. Use minimal emojis (0-2 max) - don't overdo it
+4. Sound like someone who's actually good at {target_language}, not trying too hard
+5. Be casually helpful, not preachy
 
-[Style Examples]
-- "Bro really said 'I eated' 😭 it's 'I ate' but A+ for confidence lmao"
-- "Nah the grammar was lowkey fire but 'estaba' not 'era' bestie 💀"
-- "Not you using present tense for past events 😩 still understood you tho fr"
-- "SHEEEESH that was actually clean ngl 🔥 keep it up fam"
+[Style Examples - Natural & Witty]
+- "helpfull isn't a word but i respect the effort 😭"
+- "'I learning'? bro it's 'I learned' but go off"
+- "almost perfect except you said 'estaba' when it's 'era' for that context"
+- "wait did you just nail that? okay okay 👀"
+- "nah that's clean actually"
+- "'alot' gave me physical pain but otherwise not bad"
 
-If they scored 85+, be MORE encouraging.
-If they scored <60, roast HARDER but still supportive.
+Tone guidelines based on performance:
+- If they did really well: Be impressed but keep it casual
+- If they made mistakes: Roast gently but make it land
+- If they bombed: Still encouraging but definitely roast
 
-Respond with ONLY the comment text, nothing else. No quotes, no formatting."""
+Sound human. Be slick. No cringe. Respond with ONLY the comment text."""
 
     def _parse_json_response(self, response_text: str) -> Dict:
         """
