@@ -10,35 +10,28 @@ from dotenv import load_dotenv
 import os
 from typing import List, Optional
 import json
+from database import VideoDatabase
 
-CACHE_FILE = "cached_shorts.json"
+# CACHE_FILE = "cached_shorts.json"
 
-def load_cache():
-    global cached_shorts
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                cached_shorts = json.load(f)
-            print(f"✅ Loaded {len(cached_shorts)} cached videos from {CACHE_FILE}")
-        except Exception as e:
-            print("⚠️ Failed to load cache:", e)
+# def load_cache():
+#     global cached_shorts
+#     if os.path.exists(CACHE_FILE):
+#         try:
+#             with open(CACHE_FILE, "r", encoding="utf-8") as f:
+#                 cached_shorts = json.load(f)
+#             print(f"✅ Loaded {len(cached_shorts)} cached videos from {CACHE_FILE}")
+#         except Exception as e:
+#             print("⚠️ Failed to load cache:", e)
 
-def save_cache():
-    try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cached_shorts, f, indent=2)
-        print(f"💾 Saved {len(cached_shorts)} videos to cache")
-    except Exception as e:
-        print("⚠️ Failed to save cache:", e)
+# def save_cache():
+#     try:
+#         with open(CACHE_FILE, "w", encoding="utf-8") as f:
+#             json.dump(cached_shorts, f, indent=2)
+#         print(f"💾 Saved {len(cached_shorts)} videos to cache")
+#     except Exception as e:
+#         print("⚠️ Failed to save cache:", e)
 
-
-# Try to import groq_evaluator, but make it optional
-try:
-    from groq_evaluator import GroqCommentEvaluator
-    GROQ_AVAILABLE = True
-except ImportError:
-    print("⚠️ Groq evaluator not available - AI features will be disabled")
-    GROQ_AVAILABLE = False
 
 # Try to import groq_evaluator, but make it optional
 try:
@@ -64,6 +57,7 @@ app = FastAPI()
 fetcher = YouTubeShortsSlangFetcher(YOUTUBE_API_KEY)
 groq_evaluator = GroqCommentEvaluator(GROQ_API_KEY)
 slang_discovery = SlangDiscovery(GROQ_API_KEY)
+db = VideoDatabase()
 
 # Sync fetcher's slang_terms with discovery database
 fetcher.slang_terms = slang_discovery.get_all_slang_terms()
@@ -76,7 +70,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-cached_shorts = []
+# cached_shorts = []
 
 # Request models
 class RefreshRequest(BaseModel):
@@ -86,8 +80,15 @@ class DiscoverRequest(BaseModel):
     topics: List[str]
     auto_approve: bool = False
 
-cached_shorts = []
-load_cache()
+class VideoConfig(BaseModel):
+    topics: List[str] = ["gaming", "food review", "funny moments", "dance", "pets"]
+    shorts_per_topic: int = 5
+    comments_per_short: int = 30
+    # Add an optional custom_slang field if your client might send it
+    custom_slang: List[str] = []
+
+# cached_shorts = []
+# load_cache()
 
 # ============================================================================
 # GROQ AI EVALUATION REQUEST/RESPONSE MODELS
@@ -150,24 +151,27 @@ class ExplainCommentResponse(BaseModel):
 @app.get("/")
 def home():
     return {
-        "message": "Backend running with auto slang discovery!",
+        "message": "Backend running with auto slang discovery and SQLite cache!",
         "slang_terms_loaded": len(fetcher.slang_terms),
-        "cached_videos": len(cached_shorts)
     }
 
 @app.post("/api/clear-cache")
 def clear_cache():
-    """Clear expired cache entries"""
+    """Clear expired cache entries from the SQLite database."""
     try:
         db.clear_expired_cache()
-        return {"message": "Cache cleared successfully"}
+        return {"message": "Expired cache cleared successfully from database."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 @app.get("/api/cache-stats")
 def cache_stats():
-    """Get cache statistics"""
+    """Get cache statistics from the SQLite database."""
     try:
+        # NOTE: This implementation relies on the database being initialized as 'db'
+        conn = db.init_database() # Re-use the connection method if possible, otherwise connect directly
+        
+        # Use a fresh connection for the stats retrieval
         import sqlite3
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
@@ -196,43 +200,74 @@ def cache_stats():
         raise HTTPException(status_code=500, detail=f"Error getting cache stats: {str(e)}")
 
 
-# main.py - inside get_videos (around line 28)
+# main.py (Replacing the previous consolidated endpoint)
+
 @app.get("/api/videos")
-def get_videos():
-    global cached_shorts
-    if cached_shorts:
-        return cached_shorts
-    # Increased number of topics for more variety
-    topics = ["gaming", "food review", "funny moments", "dance", "pets"] 
-    # Pass topics to the fetcher
-    shorts_data = fetcher.fetch_shorts(topics) 
-    cached_shorts = shorts_data
-    return shorts_data
-# ...
+def get_videos_db_get(
+    topics: List[str] = ["gaming", "food review", "funny moments", "dance", "pets"],
+    shorts_per_topic: int = 5,
+    comments_per_short: int = 30
+):
+    """Fetches videos using Query Parameters (GET)"""
+    # Create the config object from query parameters for consistency
+    config = VideoConfig(
+        topics=topics, 
+        shorts_per_topic=shorts_per_topic, 
+        comments_per_short=comments_per_short
+    )
+    return fetch_and_cache_videos(config)
 
-@app.post("/api/videos")  # Support both GET and POST
-def get_videos():
-    """Get cached videos or fetch new ones"""
-    global cached_shorts
-    
-    if cached_shorts:
-        return cached_shorts
-    
-    # Make sure we have latest slang
-    fetcher.slang_terms = slang_discovery.get_all_slang_terms()
-    
-    topics = ["gaming", "food review", "funny moments", "dance", "pets"] 
-    shorts_data = fetcher.fetch_shorts(topics, shorts_per_topic=5) 
-    cached_shorts = shorts_data
-    save_cache()
-    return shorts_data
+@app.post("/api/videos")
+def get_videos_db_post(config: VideoConfig):
+    """Fetches videos using a JSON Request Body (POST)"""
+    return fetch_and_cache_videos(config)
 
+# main.py (Define this utility function outside of the endpoints)
+
+def fetch_and_cache_videos(config: VideoConfig):
+    
+    # 1. Prepare parameters for cache lookup
+    custom_slang = config.custom_slang 
+    
+    # 2. Check database cache
+    cached_data = db.get_cached_videos(
+        topics=config.topics,
+        custom_slang=custom_slang,
+        shorts_per_topic=config.shorts_per_topic,
+        comments_per_short=config.comments_per_short
+    )
+    
+    if cached_data:
+        print(f"✅ Returning {len(cached_data)} cached videos from SQLite")
+        return cached_data
+
+    # 3. If no cache, fetch new data
+    print(f"🔄 Fetching fresh data from YouTube API for topics: {config.topics}")
+    shorts_data = fetcher.fetch_shorts(
+        topics=config.topics,
+        shorts_per_topic=config.shorts_per_topic,
+        comments_per_short=config.comments_per_short
+    )
+    
+    # 4. Save cache
+    db.cache_videos(
+        videos=shorts_data,
+        topics=config.topics,
+        custom_slang=custom_slang,
+        shorts_per_topic=config.shorts_per_topic,
+        comments_per_short=config.comments_per_short,
+        cache_hours=24
+    )
+    print(f"💾 Cached {len(shorts_data)} videos to SQLite database")
+
+    return shorts_data
 
 @app.post("/api/refresh")
 def refresh_videos(request: RefreshRequest = None):
-    """Refresh videos AND automatically discover new slang"""
-    global cached_shorts
+    """Refresh videos, discover new slang, and cache results in the database."""
     
+    # ... (Discovery and fetching logic remains the same) ...
+
     # Handle both body and default
     topics = request.topics if request else ["gaming", "food review", "funny moments", "dance", "pets"]
     
@@ -268,10 +303,19 @@ def refresh_videos(request: RefreshRequest = None):
     if new_slang:
         print(f"✨ Discovered {len(new_slang)} new terms! Re-fetching...")
         fetcher.slang_terms = slang_discovery.get_all_slang_terms()
-        shorts_data = fetcher.fetch_shorts(topics, shorts_per_topic=5)
+        shorts_data = fetcher.fetch_shorts(topics, shorts_per_topic=5, comments_per_short=30)
     
-    cached_shorts = shorts_data
-    save_cache()
+    # Cache the final results using the database instead of JSON
+    db.cache_videos(
+        videos=shorts_data,
+        topics=topics,
+        custom_slang=[], 
+        shorts_per_topic=5,
+        comments_per_short=30,
+        cache_hours=24
+    )
+    print(f"💾 Refreshed {len(shorts_data)} videos in SQLite database")
+
     return {
         "videos": shorts_data,
         "new_slang_discovered": [
