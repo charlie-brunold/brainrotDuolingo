@@ -161,6 +161,21 @@ class AIResponse(BaseModel):
 class RespondResponse(BaseModel):
     responses: List[AIResponse]
 
+class SlangBreakdownItem(BaseModel):
+    term: str
+    definition: str
+    usage: str
+
+class ExplainCommentRequest(BaseModel):
+    commentText: str
+    videoTitle: str
+    videoDescription: str
+    detectedSlang: List[str] = []
+
+class ExplainCommentResponse(BaseModel):
+    translation: str
+    slangBreakdown: List[SlangBreakdownItem]
+
 
 # Stage 1: Evaluate user comment and return score with social validation
 @app.post("/api/evaluate", response_model=EvaluateResponse)
@@ -216,6 +231,29 @@ def generate_ai_response(request: RespondRequest):
         return {"responses": responses}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Response generation error: {str(e)}")
+
+
+# Stage 3: Explain YouTube comments with slang translations
+@app.post("/api/explain-comment", response_model=ExplainCommentResponse)
+def explain_comment(request: ExplainCommentRequest):
+    """
+    Explain a YouTube comment by translating it to simpler language
+    and breaking down each slang term.
+
+    Returns:
+        - translation: The comment rewritten in simple language without slang
+        - slangBreakdown: Array of objects with term, definition, and usage
+    """
+    try:
+        explanation = groq_evaluator.explain_comment(
+            comment_text=request.commentText,
+            video_title=request.videoTitle,
+            video_description=request.videoDescription,
+            detected_slang=request.detectedSlang
+        )
+        return explanation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

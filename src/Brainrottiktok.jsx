@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
 
 // --- SLANG TERMS (Static Data) ---
 const SLANG_TERMS = {
@@ -40,6 +40,9 @@ export default function BrainrotTikTok({ shortsData }) {
   const [touchStart, setTouchStart] = useState(0); // NEW: Track Y position on touch start
   const [touchEnd, setTouchEnd] = useState(0);   // NEW: Track Y position on touch end
   const [isEvaluating, setIsEvaluating] = useState(false); // NEW: Loading state for API calls
+  const [explanations, setExplanations] = useState({}); // Cache for comment explanations
+  const [activeExplanation, setActiveExplanation] = useState(null); // Which comment has tooltip visible
+  const [loadingExplanation, setLoadingExplanation] = useState(null); // Which comment is loading
   const containerRef = useRef(null);
   
   // Use provided shortsData or fallback
@@ -185,6 +188,75 @@ export default function BrainrotTikTok({ shortsData }) {
     } catch (error) {
       console.error('Error generating AI response:', error);
       throw error;
+    }
+  };
+
+  const fetchCommentExplanation = async (commentId, commentText, detectedSlang) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/explain-comment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commentText: commentText,
+          videoTitle: currentVideo.title || 'Untitled Video',
+          videoDescription: currentVideo.description || '',
+          detectedSlang: detectedSlang || [],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch explanation');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching explanation:', error);
+      throw error;
+    }
+  };
+
+  const handleExplainClick = async (commentId, commentText, detectedSlang) => {
+    // If this comment is already showing, just close it
+    if (activeExplanation === commentId) {
+      setActiveExplanation(null);
+      return;
+    }
+
+    // If already cached, just show it
+    if (explanations[commentId]) {
+      setActiveExplanation(commentId);
+      return;
+    }
+
+    // Otherwise, fetch from API
+    setLoadingExplanation(commentId);
+    try {
+      const explanation = await fetchCommentExplanation(commentId, commentText, detectedSlang);
+
+      // Cache the explanation
+      setExplanations(prev => ({
+        ...prev,
+        [commentId]: explanation
+      }));
+
+      // Show the explanation
+      setActiveExplanation(commentId);
+    } catch (error) {
+      console.error('Failed to get explanation:', error);
+      // Show error explanation
+      setExplanations(prev => ({
+        ...prev,
+        [commentId]: {
+          translation: 'Could not load explanation. Please try again.',
+          slangBreakdown: []
+        }
+      }));
+      setActiveExplanation(commentId);
+    } finally {
+      setLoadingExplanation(null);
     }
   };
 
@@ -483,23 +555,75 @@ export default function BrainrotTikTok({ shortsData }) {
                 ))}
                 
                 {/* Show real comments from the video */}
-                {currentVideo.comments_with_slang && currentVideo.comments_with_slang.slice(0, 5).map((c, idx) => (
-                  <div key={`real-${idx}`} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <div className="text-white font-semibold text-sm">{c.author}</div>
-                      <div className="text-white/90 text-sm mt-1">{c.text}</div>
-                      <div className="flex gap-4 mt-2">
-                        <button className="text-gray-400 text-xs flex items-center gap-1">
-                          <Heart className="w-3 h-3" /> {c.like_count}
-                        </button>
-                        <span className="text-purple-400 text-xs">
-                          {c.detected_slang.join(', ')}
-                        </span>
+                {currentVideo.comments_with_slang && currentVideo.comments_with_slang.slice(0, 5).map((c, idx) => {
+                  const commentId = c.comment_id;
+                  const isExplaining = activeExplanation === commentId;
+                  const isLoading = loadingExplanation === commentId;
+                  const explanation = explanations[commentId];
+
+                  return (
+                    <div key={commentId} className="relative">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-white font-semibold text-sm">{c.author}</div>
+                            <button
+                              onClick={() => handleExplainClick(commentId, c.text, c.detected_slang)}
+                              disabled={isLoading}
+                              className="p-1 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-colors disabled:opacity-50"
+                              title="Explain this comment"
+                            >
+                              {isLoading ? (
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Lightbulb className="w-3 h-3 text-yellow-300" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="text-white/90 text-sm mt-1">{c.text}</div>
+
+                          {/* Tooltip/Bubble for Explanation */}
+                          {isExplaining && explanation && (
+                            <div className="mt-3 p-3 bg-gray-800 rounded-lg shadow-lg border border-gray-700 relative">
+                              <button
+                                onClick={() => setActiveExplanation(null)}
+                                className="absolute top-2 right-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
+                              >
+                                <X className="w-3 h-3 text-gray-400" />
+                              </button>
+
+                              <div className="text-white/90 text-xs mb-2">
+                                <span className="font-semibold text-blue-400">Translation:</span> {explanation.translation}
+                              </div>
+
+                              {explanation.slangBreakdown && explanation.slangBreakdown.length > 0 && (
+                                <div className="text-white/80 text-xs">
+                                  <div className="font-semibold text-purple-400 mb-1">Slang Breakdown:</div>
+                                  {explanation.slangBreakdown.map((item, i) => (
+                                    <div key={i} className="ml-2 mb-1">
+                                      <span className="text-yellow-300 font-semibold">{item.term}:</span> {item.definition}
+                                      <div className="text-gray-400 italic ml-2">"{item.usage}"</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-4 mt-2">
+                            <button className="text-gray-400 text-xs flex items-center gap-1">
+                              <Heart className="w-3 h-3" /> {c.like_count}
+                            </button>
+                            <span className="text-purple-400 text-xs">
+                              {c.detected_slang.join(', ')}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Comment Input */}
