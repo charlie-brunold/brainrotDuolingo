@@ -518,23 +518,18 @@ CRITICAL JSON RULES:
         Returns:
             A creative, Gen Z style username
         """
-        prompt = """Generate a single creative Gen Z/TikTok style username.
+        prompt = """Generate a single creative username.
 
 Examples of the style:
-- SkibidiKing
-- RizzMaster
-- SigmaGrinder
-- BussinVibes
-- NoCapLegend
-- GlazingGuru
-- AuraHunter
-- MoggingChamp
-- OhioEnjoyer
-- MewingExpert
+- sillySalmon728
+- Jonathan.Doe
+- rizzMaster3000
+- RussianMonk14
+- charliebrunold
+- coolguy12345
+- knannsbb2ll
 
 Requirements:
-- One word or CamelCase compound (no spaces, underscores, or numbers)
-- Gen Z slang terms encouraged
 - Creative and unique
 - 8-15 characters
 
