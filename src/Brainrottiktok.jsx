@@ -140,7 +140,7 @@ export default function BrainrotTikTok({ shortsData }) {
           videoDescription: currentVideo.description || '',
           userComment: commentText,
           targetLanguage: 'English', // TODO: Make this configurable
-          videoViewCount: currentVideo.view_count || 0,
+          videoLikeCount: currentVideo.like_count || 0,
           availableSlang: currentVideo.unique_slang_terms || [],
         }),
       });
@@ -465,10 +465,10 @@ export default function BrainrotTikTok({ shortsData }) {
                         </div>
                         <div className="flex-1">
                           <div className="text-white font-semibold text-sm">
-                            {response.authorName || response}
+                            {response.authorName || 'AI Coach'}
                           </div>
                           <div className="text-white/90 text-sm mt-1">
-                            {response.aiComment || response}
+                            {response.aiComment || 'No response available'}
                           </div>
                           <div className="flex gap-4 mt-2">
                             <button className="text-gray-400 text-xs flex items-center gap-1">
