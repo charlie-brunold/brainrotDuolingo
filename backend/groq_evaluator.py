@@ -566,6 +566,8 @@ Examples of the style:
 
 Requirements:
 - Creative and unique
+- A concious choice between either camel case, snake case, lowercase, or uppercase
+- A username with special personality that a Gen Z user would pick
 - 8-15 characters
 
 Output ONLY the username with no explanation or punctuation."""
@@ -699,119 +701,63 @@ Output ONLY the username with no explanation or punctuation."""
         detected_slang: List[str],
         response_index: int
     ) -> str:
-        """
-        Build a response prompt with variation based on the response index.
-        Different "personalities" will have different focuses.
-        """
+        """Build a natural response prompt without forced personality."""
+        
         mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
-
-        # Build slang context
+        
+        # Build minimal slang context - don't label it as "detected" or "available"
         slang_context = ""
         if detected_slang:
-            slang_list = ", ".join(detected_slang)
-            slang_context = f"\n- Slang they used: {slang_list}"
-        elif available_slang:
-            slang_list = ", ".join(available_slang[:3])  # Show first 3
-            slang_context = f"\n- Available slang they could have used: {slang_list}"
+            slang_context = f"\nSlang in their comment: {', '.join(detected_slang)}"
+        if available_slang and not detected_slang:
+            # Only show available slang if they didn't use any
+            slang_context = f"\nCommon slang for this: {', '.join(available_slang[:2])}"
 
-        # Define different personality focuses with slang and score awareness
-        # Adjust tone based on score tier
-        if score >= 90:
-            # Fire comment - pure hype energy
-            if detected_slang:
-                personalities = [
-                    "You're HYPED. They nailed the slang perfectly and you can't contain your excitement.",
-                    "You're blown away by how perfect their slang usage is. Celebrate this fire comment.",
-                    "You're impressed and want everyone to see this amazing slang usage.",
-                    "You're vibing with their energy. This is exactly how slang should be used."
-                ]
-            else:
-                personalities = [
-                    "You're impressed with their comment quality but playfully suggest they could have leveled up with slang.",
-                    "You appreciate the solid comment but hint they missed a chance to be legendary with slang.",
-                    "You're supportive. They did great but could have been even more fire with slang.",
-                    "You're chill. Good comment, but imagine if they used that available slang."
-                ]
-        elif score >= 70:
-            # Solid comment - balanced encouragement
-            if detected_slang:
-                personalities = [
-                    "You're encouraging. They got the slang right and you're here for it.",
-                    "You're supportive. Acknowledge they did well with the slang.",
-                    "You're impressed they used slang correctly. Give them props.",
-                    "You're casual but positive about their slang attempt."
-                ]
-            else:
-                personalities = [
-                    "You're encouraging but suggest trying slang next time.",
-                    "You're supportive. Good grammar but they missed the slang opportunity.",
-                    "You're chill. Solid comment, just needs some slang flavor.",
-                    "You're friendly. Point out the available slang they could have used."
-                ]
-        elif score >= 50:
-            # Mid comment - constructive criticism
-            if detected_slang:
-                personalities = [
-                    "You're constructive. They tried slang but it needs work.",
-                    "You're helpful. Point out what went wrong with their slang usage.",
-                    "You're patient. They attempted slang but didn't quite nail it.",
-                    "You're casual about correcting their slang mistake."
-                ]
-            else:
-                personalities = [
-                    "You're pointing out they should have used the available slang.",
-                    "You're direct. They missed the whole point of using slang.",
-                    "You're suggesting they need to engage with the slang more.",
-                    "You're casual but firm about the missed slang opportunity."
-                ]
-        else:
-            # Low score - reality check with gentle roast
-            if detected_slang:
-                personalities = [
-                    "You're gently roasting their slang misuse. It's pretty off but you're not mean.",
-                    "You're pointing out their slang is way wrong. Keep it light but honest.",
-                    "You're helping them understand their slang mistake was significant.",
-                    "You're being real about how badly they missed the mark on slang."
-                ]
-            else:
-                personalities = [
-                    "You're pointing out this comment needed a lot more effort, especially with slang.",
-                    "You're being real. This was low effort and they skipped the slang entirely.",
-                    "You're suggesting they try harder next time, especially with the available slang.",
-                    "You're casual but honest that this comment wasn't it."
-                ]
+        # Simple variation without personality engineering
+        response_styles = [
+        "React with minimal words - one or two words plus maybe an emoji.",
+        "Point out one specific thing that caught your attention, ignore everything else.",
+        "Ask a question instead of making a statement.",
+        "Focus only on whether it worked or not, skip the explanation.",
+        "React to their energy/vibe, not the technical mistakes.",
+        "Be deadpan - state what's wrong like it's obvious.",
+        "Give props if deserved, but make it understated.",
+        "Use their own words back at them with correction.",
+        "If there's slang, only comment on that - nothing else matters.",
+        "Ignore any mistakes and just vibe with the content of what they said.",
+        "Be blunt about what's wrong but keep it light.",
+        "React like you're genuinely surprised (positive or negative).",
+        ]
+        
+        style_hint = response_styles[response_index % len(response_styles)]
 
-        personality = personalities[response_index % len(personalities)]
+        return f"""You're scrolling comments and you're fluent in {target_language}. You comment like a regular person, not a language teacher.
 
-        return f"""You're someone who's fluent in {target_language} scrolling through comments. {personality}
+Post: "{video_title}"
+Their comment: "{user_comment}"
+Mistakes: {mistakes_text}
+Correction: {correction}{slang_context}
 
-Context:
-- Post: "{video_title}"
-- Their comment: "{user_comment}"
-- Mistakes: {mistakes_text}
-- Correction: {correction}
-- Their score: {score}/100{slang_context}
+{style_hint}
 
-Write a SHORT comment (1-2 sentences max) responding to their comment. Keep it authentic - you're just another person in the comments, not a teacher.
+Examples of natural responses:
 
-Style examples for CORRECT slang usage:
-"yo you used 'bussin' perfectly 🔥"
-"okay the rizz comment was actually fire"
-"nah you got that slang right fr fr"
+"*learned"
+"wait this is actually good"
+"bro 💀"
+"nah you cooked"
+"okay the slang hit different"
+"helpfull??"
+"'alot' is crazy but go off"
+"fr this is clean"
+"almost perfect but it's 'era' not 'estaba'"
+"you really said bussin unironically"
+"could've used some slang tbh"
+"this works"
+"my guy forgot how to spell"
+"okay okay I see you"
+"'I learning' - bro"
+"fire comment ngl"
+"that's not how you use that slang lol"
 
-Style examples for WRONG slang usage:
-"bro 'fire' is an adjective not a verb 💀"
-"'cooked' means ruined, not success lmao"
-"almost had it but 'bussin' is for food/vibes not people"
-
-Style examples for NO slang used:
-"coulda said this was bussin tbh"
-"missed chance to use some fire slang ngl"
-"solid comment but try the slang next time"
-
-General style:
-"*learned, but yeah same"
-"that's clean actually"
-"okay this is lowkey impressive"
-
-Just respond with the comment. No explanation, no quotes."""
+Just write the comment (1-2 sentences max). Nothing else."""
