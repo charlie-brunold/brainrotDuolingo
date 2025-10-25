@@ -1,107 +1,43 @@
-# main.py
-
+import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from youtube_fetcher import YouTubeShortsSlangFetcher
 from groq_evaluator import GroqCommentEvaluator
 from slang_discovery import SlangDiscovery
+from database import VideoDatabase
 from dotenv import load_dotenv
 import os
-from typing import List, Optional
+import re
+from typing import List, Optional, Dict
+from collections import defaultdict, Counter
 import json
-from database import VideoDatabase
+import random  # <-- NEW: Import for shuffling lists
+import time # <-- NEW: Import for time.sleep in retry logic
 
-# CACHE_FILE = "cached_shorts.json"
+# ============================================================================
+# 3. REQUEST/RESPONSE MODELS
+# ============================================================================
 
-# def load_cache():
-#     global cached_shorts
-#     if os.path.exists(CACHE_FILE):
-#         try:
-#             with open(CACHE_FILE, "r", encoding="utf-8") as f:
-#                 cached_shorts = json.load(f)
-#             print(f"✅ Loaded {len(cached_shorts)} cached videos from {CACHE_FILE}")
-#         except Exception as e:
-#             print("⚠️ Failed to load cache:", e)
-
-# def save_cache():
-#     try:
-#         with open(CACHE_FILE, "w", encoding="utf-8") as f:
-#             json.dump(cached_shorts, f, indent=2)
-#         print(f"💾 Saved {len(cached_shorts)} videos to cache")
-#     except Exception as e:
-#         print("⚠️ Failed to save cache:", e)
-
-
-# Try to import groq_evaluator, but make it optional
-try:
-    from groq_evaluator import GroqCommentEvaluator
-    GROQ_AVAILABLE = True
-except ImportError:
-    print("⚠️ Groq evaluator not available - AI features will be disabled")
-    GROQ_AVAILABLE = False
-
-# Load API keys
-load_dotenv()
-YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY') 
-GROQ_API_KEY = os.getenv('GROQ_API_KEY') 
-
-if not YOUTUBE_API_KEY:
-    raise ValueError("YOUTUBE_API_KEY missing")
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY missing")
-
-
-# Initialize FastAPI and services
-app = FastAPI()
-fetcher = YouTubeShortsSlangFetcher(YOUTUBE_API_KEY)
-groq_evaluator = GroqCommentEvaluator(GROQ_API_KEY)
-slang_discovery = SlangDiscovery(GROQ_API_KEY)
-db = VideoDatabase()
-
-# Sync fetcher's slang_terms with discovery database
-fetcher.slang_terms = slang_discovery.get_all_slang_terms()
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-# cached_shorts = []
-
-# Request models
-class RefreshRequest(BaseModel):
-    topics: Optional[List[str]] = ["gaming", "food review", "funny moments", "dance", "pets"]
-
+# General Request Models
 class DiscoverRequest(BaseModel):
     topics: List[str]
     auto_approve: bool = False
 
 class VideoConfig(BaseModel):
     topics: List[str] = ["gaming", "food review", "funny moments", "dance", "pets"]
-    shorts_per_topic: int = 5
+    shorts_per_topic: int = 15 
     comments_per_short: int = 30
-    # Add an optional custom_slang field if your client might send it
     custom_slang: List[str] = []
 
-# cached_shorts = []
-# load_cache()
-
-# ============================================================================
-# GROQ AI EVALUATION REQUEST/RESPONSE MODELS
-# ============================================================================
-
+# AI Evaluation Models (Abbreviated for brevity, assuming standard structure)
 class EvaluateRequest(BaseModel):
     videoTitle: str
     videoDescription: str
     userComment: str
     targetLanguage: str
     videoLikeCount: int
-    availableSlang: List[str] = []  # Slang terms available in the video
-    forbiddenSlang: List[str] = []  # Slang from example comments (user shouldn't copy these)
+    availableSlang: List[str] = [] 
 
 class EvaluateResponse(BaseModel):
     score: int
@@ -120,8 +56,7 @@ class RespondRequest(BaseModel):
     correction: str
     videoTitle: str
     targetLanguage: str
-    availableSlang: List[str] = []  # Slang available in the video
-    forbiddenSlang: List[str] = []  # Slang from example comments (user shouldn't copy these)
+    availableSlang: List[str] = []
 
 class AIResponse(BaseModel):
     aiComment: str
@@ -146,28 +81,209 @@ class ExplainCommentResponse(BaseModel):
     translation: str
     slangBreakdown: List[SlangBreakdownItem]
 
-class SuggestSlangRequest(BaseModel):
-    learnedTerms: List[str]
-
-class SlangSuggestion(BaseModel):
-    term: str
-    definition: str
-    reason: str
-    category: str
-
-class SuggestSlangResponse(BaseModel):
-    suggestions: List[SlangSuggestion]
 
 # ============================================================================
-# API ENDPOINTS
+# 1. HELPER FUNCTIONS
+# ============================================================================
+
+def extract_slang_candidates_with_context(all_comments: List[Dict]) -> Dict[str, List[str]]:
+    """
+    INJECTED HELPER FUNCTION: This logic replaces the external call and is used 
+    by the manual_discovery endpoint to filter comments locally before AI verification.
+    """
+    
+    candidate_counts = Counter()
+    candidate_context = defaultdict(list)
+    
+    # Use existing slang for fast lookup and exclusion
+    existing_slang = slang_discovery.get_all_slang_terms()
+    approved_slang = set(term.lower() for term in existing_slang)
+    
+    for comment_data in all_comments:
+        text = comment_data.get('text', '').lower()
+        
+        # Simple tokenization for words (alphanumeric only)
+        words = re.findall(r'\b[a-z0-9]+\b', text)
+        
+        # Check single words
+        for word in words:
+            if len(word) > 2 and word not in approved_slang:
+                candidate_counts[word] += 1
+                if len(candidate_context[word]) < 3: # Store up to 3 context examples
+                    candidate_context[word].append(text)
+
+        # Check two-word phrases (bigrams)
+        for i in range(len(words) - 1):
+            phrase = f"{words[i]} {words[i+1]}"
+            if phrase not in approved_slang and len(phrase) > 4:
+                candidate_counts[phrase] += 1
+                if len(candidate_context[phrase]) < 3:
+                    candidate_context[phrase].append(text)
+
+    # Filter candidates based on frequency (heuristic: must appear in at least 3 comments)
+    MIN_FREQUENCY = 3 
+    final_candidates = {}
+    
+    for candidate, count in candidate_counts.items():
+        if count >= MIN_FREQUENCY:
+            # Final check to avoid sending overly long phrases to AI
+            if candidate not in approved_slang and len(candidate.split()) <= 2:
+                final_candidates[candidate] = candidate_context[candidate]
+
+    return final_candidates
+
+def fetch_and_cache_videos(config: VideoConfig, slang_only: bool = False, last_video_id: Optional[str] = None):
+    """
+    Unified function to check cache, fetch videos from YouTube, and save results to DB.
+    """
+    
+    # 1. Prepare parameters for cache lookup
+    custom_slang = config.custom_slang 
+    
+    # Cache Busting logic
+    shorts_per_topic_base = config.shorts_per_topic
+    shorts_per_topic = shorts_per_topic_base + random.choice([0, 0, 1, 1, 2, 2])
+    
+    # 2. Check database cache (read operation)
+    cached_data = db.get_cached_videos(
+        topics=config.topics,
+        custom_slang=custom_slang,
+        shorts_per_topic=shorts_per_topic, 
+        comments_per_short=config.comments_per_short
+    )
+    
+    final_videos = []
+    priority_video = None
+    
+    # Handle cache hit
+    if cached_data:
+        # Filter for slang_only if requested
+        if slang_only:
+            cached_data = [v for v in cached_data if v.get('slang_comment_count', 0) > 0]
+            
+        # Check for priority video
+        if last_video_id:
+            priority_list = [v for v in cached_data if v.get('video_id') == last_video_id]
+            if priority_list:
+                priority_video = priority_list[0]
+                cached_data = [v for v in cached_data if v.get('video_id') != last_video_id]
+
+        print(f"✅ Returning {len(cached_data) + (1 if priority_video else 0)} videos from SQLite (cached + priority)")
+        random.shuffle(cached_data) 
+        final_videos.extend(cached_data)
+        
+    # 3. If cache missed, attempt to fetch new data with retries
+    else:
+        MAX_RETRIES = 3
+        shorts_data = []
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                print(f"🔄 Fetching fresh data from YouTube API for topics: {config.topics} (Attempt {attempt + 1}/{MAX_RETRIES})")
+                shorts_data = fetcher.fetch_shorts(
+                    topics=config.topics,
+                    shorts_per_topic=shorts_per_topic, 
+                    comments_per_short=config.comments_per_short
+                )
+                if shorts_data:
+                    break
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    print(f"⚠️ Fetch attempt {attempt + 1} failed: {str(e)[:50]}... Retrying in 2 seconds.")
+                    time.sleep(2) 
+                else:
+                    print(f"❌ Final fetch attempt failed after {MAX_RETRIES} retries. Error: {str(e)}")
+                    raise HTTPException(status_code=504, detail=f"YouTube API Request Timeout/Failure: {str(e)}")
+
+
+        # 4. Save cache & process data
+        if shorts_data:
+            db.cache_videos(
+                videos=shorts_data,
+                topics=config.topics,
+                custom_slang=custom_slang,
+                shorts_per_topic=shorts_per_topic, 
+                comments_per_short=config.comments_per_short,
+                cache_hours=24
+            )
+            print(f"💾 Cached {len(shorts_data)} videos to SQLite database")
+            
+            # Filter the newly fetched data before returning
+            if slang_only:
+                shorts_data = [v for v in shorts_data if v.get('slang_comment_count', 0) > 0]
+            
+            random.shuffle(shorts_data) 
+            final_videos.extend(shorts_data)
+            
+            # Handle priority video in freshly fetched data
+            if last_video_id and not priority_video:
+                priority_list = [v for v in shorts_data if v.get('video_id') == last_video_id]
+                if priority_list:
+                    priority_video = priority_list[0]
+                    final_videos = [v for v in final_videos if v.get('video_id') != last_video_id]
+
+
+    # 5. Prepend the priority video (if found)
+    if priority_video:
+        final_videos.insert(0, priority_video)
+
+    return final_videos
+
+
+# ============================================================================
+# 2. INITIALIZATION AND SETUP
+# ============================================================================
+
+# Check Groq availability
+try:
+    from groq_evaluator import GroqCommentEvaluator
+    GROQ_AVAILABLE = True
+except ImportError:
+    print("⚠️ Groq evaluator not available - AI features will be disabled")
+    GROQ_AVAILABLE = False
+
+# Load API keys
+load_dotenv()
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY') 
+GROQ_API_KEY = os.getenv('GROQ_API_KEY') 
+
+if not YOUTUBE_API_KEY:
+    raise ValueError("YOUTUBE_API_KEY missing")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY missing")
+
+
+# Initialize FastAPI and services
+app = FastAPI()
+fetcher = YouTubeShortsSlangFetcher(YOUTUBE_API_KEY)
+groq_evaluator = GroqCommentEvaluator(GROQ_API_KEY)
+slang_discovery = SlangDiscovery(GROQ_API_KEY)
+db = VideoDatabase() 
+
+# Sync fetcher's slang_terms with discovery database
+fetcher.slang_terms = slang_discovery.get_all_slang_terms()
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+
+# ============================================================================
+# 4. API ENDPOINTS
 # ============================================================================
 
 @app.get("/")
 def home():
     return {
         "message": "Backend running with auto slang discovery and SQLite cache!",
-        "slang_terms_loaded": len(fetcher.slang_terms),
+        "slang_terms_loaded": len(slang_discovery.get_all_slang_terms()),
     }
+
+# --- CACHE MANAGEMENT ENDPOINTS ---
 
 @app.post("/api/clear-cache")
 def clear_cache():
@@ -182,23 +298,15 @@ def clear_cache():
 def cache_stats():
     """Get cache statistics from the SQLite database."""
     try:
-        # NOTE: This implementation relies on the database being initialized as 'db'
-        conn = db.init_database() # Re-use the connection method if possible, otherwise connect directly
-        
-        # Use a fresh connection for the stats retrieval
         import sqlite3
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
         
-        # Get video count
+        # Get counts
         cursor.execute("SELECT COUNT(*) FROM videos")
         video_count = cursor.fetchone()[0]
-        
-        # Get comment count
         cursor.execute("SELECT COUNT(*) FROM comments")
         comment_count = cursor.fetchone()[0]
-        
-        # Get cache entries
         cursor.execute("SELECT COUNT(*) FROM cache_metadata")
         cache_entries = cursor.fetchone()[0]
         
@@ -214,133 +322,100 @@ def cache_stats():
         raise HTTPException(status_code=500, detail=f"Error getting cache stats: {str(e)}")
 
 
-# main.py (Replacing the previous consolidated endpoint)
+# --- VIDEO FETCHING ENDPOINTS ---
 
 @app.get("/api/videos")
 def get_videos_db_get(
     topics: List[str] = ["gaming", "food review", "funny moments", "dance", "pets"],
-    shorts_per_topic: int = 5,
-    comments_per_short: int = 30
+    shorts_per_topic: int = 15, 
+    comments_per_short: int = 30,
+    slang_only: bool = False, # <-- FILTER PARAMETER
+    last_video_id: Optional[str] = None
 ):
-    """Fetches videos using Query Parameters (GET)"""
-    # Create the config object from query parameters for consistency
+    """Fetches videos using Query Parameters (GET). Checks database cache first."""
     config = VideoConfig(
         topics=topics, 
         shorts_per_topic=shorts_per_topic, 
         comments_per_short=comments_per_short
     )
-    return fetch_and_cache_videos(config)
+    return fetch_and_cache_videos(config, slang_only=slang_only, last_video_id=last_video_id)
 
 @app.post("/api/videos")
-def get_videos_db_post(config: VideoConfig):
-    """Fetches videos using a JSON Request Body (POST)"""
-    return fetch_and_cache_videos(config)
+def get_videos_db_post(config: VideoConfig, slang_only: bool = True, last_video_id: Optional[str] = None):
+    """
+    Fetches videos using a JSON Request Body (POST). Checks database cache first.
+    Note: slang_only/last_video_id must be passed as query parameters if used with POST.
+    """
+    return fetch_and_cache_videos(config, slang_only=slang_only, last_video_id=last_video_id)
 
-# main.py (Define this utility function outside of the endpoints)
 
-def fetch_and_cache_videos(config: VideoConfig):
-    
-    # 1. Prepare parameters for cache lookup
-    custom_slang = config.custom_slang 
-    
-    # 2. Check database cache
-    cached_data = db.get_cached_videos(
-        topics=config.topics,
-        custom_slang=custom_slang,
-        shorts_per_topic=config.shorts_per_topic,
-        comments_per_short=config.comments_per_short
-    )
-    
-    if cached_data:
-        print(f"✅ Returning {len(cached_data)} cached videos from SQLite")
-        return cached_data
+# --- SLANG DATABASE ENDPOINTS ---
 
-    # 3. If no cache, fetch new data
-    print(f"🔄 Fetching fresh data from YouTube API for topics: {config.topics}")
+@app.post("/api/discover-slang")
+def manual_discovery(request: DiscoverRequest):
+    """
+    Manually triggers the full two-stage slang discovery flow:
+    1. Fetches fresh comments from YouTube (Stage 0).
+    2. Runs local frequency checks to find candidates (Stage 1 - internal).
+    3. Uses Groq AI to verify and enrich candidates (Stage 2 - internal).
+    """
+    topics = request.topics
+    print(f"\n🔍 Manual discovery started for topics: {topics}")
+    
+    # Ensure fetcher has current approved slang to detect new candidates accurately
+    current_slang = slang_discovery.get_all_slang_terms() 
+    fetcher.slang_terms = current_slang
+    
+    # 1. Fetch videos to get fresh comments (Aggressive parameters)
     shorts_data = fetcher.fetch_shorts(
-        topics=config.topics,
-        shorts_per_topic=config.shorts_per_topic,
-        comments_per_short=config.comments_per_short
+        topics=topics,
+        shorts_per_topic=40, # Maximize videos searched
+        comments_per_short=80 # Maximize comments per video
     )
     
-    # 4. Save cache
-    db.cache_videos(
-        videos=shorts_data,
-        topics=config.topics,
-        custom_slang=custom_slang,
-        shorts_per_topic=config.shorts_per_topic,
-        comments_per_short=config.comments_per_short,
-        cache_hours=24
-    )
-    print(f"💾 Cached {len(shorts_data)} videos to SQLite database")
-
-    return shorts_data
-
-@app.post("/api/refresh")
-def refresh_videos(request: RefreshRequest = None):
-    """Refresh videos, discover new slang, and cache results in the database."""
-    
-    # ... (Discovery and fetching logic remains the same) ...
-
-    # Handle both body and default
-    topics = request.topics if request else ["gaming", "food review", "funny moments", "dance", "pets"]
-    
-    print(f"\n🔄 Refreshing with topics: {topics}")
-    
-    # Update fetcher with current slang database
-    fetcher.slang_terms = slang_discovery.get_all_slang_terms()
-    print(f"📚 Current slang database: {len(fetcher.slang_terms)} terms")
-    
-    # Fetch videos with current slang
-    shorts_data = fetcher.fetch_shorts(topics, shorts_per_topic=5, comments_per_short=30)
-    print(f"📹 Fetched {len(shorts_data)} shorts")
-    
-    # Collect ALL comments for discovery
+    # 2. Collect ALL comments for the discovery process
     all_comments = []
     for short in shorts_data:
-        # Get the comments that were already fetched (they have slang)
         comments_with_slang = short.get('comments_with_slang', [])
         all_comments.extend(comments_with_slang)
     
-    print(f"💬 Collected {len(all_comments)} comments for analysis")
+    print(f"💬 Analyzing {len(all_comments)} comments for new candidates...")
     
-    # Discover new slang
-    new_slang = []
-    if len(all_comments) > 10:
-        print("🤖 Running AI slang discovery...")
-        new_slang = slang_discovery.discover_new_slang(
-            all_comments, 
-            auto_approve=True
+    if len(all_comments) < 20:
+        raise HTTPException(
+            status_code=400, 
+            detail="Not enough comments collected. Try different topics."
         )
+        
+    # 3. STAGE 1 & 2: Local Filter, AI Verification, and Save
+    # We call the local filter here:
+    candidates_with_context = extract_slang_candidates_with_context(all_comments)
+
+    if not candidates_with_context:
+        return {
+            "message": "Discovery complete.",
+            "discovered": 0,
+            "total_slang_terms_now": len(slang_discovery.get_all_slang_terms()),
+            "new_terms": [],
+        }
+
+    # Pass the filtered list to the AI verification step
+    new_slang = slang_discovery.verify_and_enrich_slang(candidates_with_context)
     
-    # If we found new slang, re-fetch to include them
-    if new_slang:
-        print(f"✨ Discovered {len(new_slang)} new terms! Re-fetching...")
-        fetcher.slang_terms = slang_discovery.get_all_slang_terms()
-        shorts_data = fetcher.fetch_shorts(topics, shorts_per_topic=5, comments_per_short=30)
-    
-    # Cache the final results using the database instead of JSON
-    db.cache_videos(
-        videos=shorts_data,
-        topics=topics,
-        custom_slang=[], 
-        shorts_per_topic=5,
-        comments_per_short=30,
-        cache_hours=24
-    )
-    print(f"💾 Refreshed {len(shorts_data)} videos in SQLite database")
+    # Update fetcher again in case new slang was discovered and saved
+    fetcher.slang_terms = slang_discovery.get_all_slang_terms()
 
     return {
-        "videos": shorts_data,
-        "new_slang_discovered": [
+        "message": "Discovery complete.",
+        "discovered": len(new_slang),
+        "total_slang_terms_now": len(fetcher.slang_terms),
+        "new_terms": [
             {
                 "term": s['term'],
                 "definition": s['definition'],
-                "category": s['category'],
-                "example": s['example']
+                "category": s['category']
             } for s in new_slang
-        ],
-        "total_slang_terms": len(fetcher.slang_terms)
+        ]
     }
 
 
@@ -348,6 +423,10 @@ def refresh_videos(request: RefreshRequest = None):
 def get_all_slang():
     """Get all known slang terms with definitions"""
     slang_db = slang_discovery.slang_database
+    from collections import Counter # local import for category calculation
+    
+    categories = [info.get('category', 'unknown') for info in slang_db.values()]
+    
     return {
         "total_terms": len(slang_db),
         "terms": [
@@ -358,52 +437,9 @@ def get_all_slang():
                 "example": info.get('example', '')
             }
             for term, info in slang_db.items()
-        ]
+        ],
+        "slang_by_category": dict(Counter(categories))
     }
-
-
-@app.get("/api/slang/{term}")
-def get_slang_definition(term: str):
-    """Get definition for a specific slang term"""
-    info = slang_discovery.get_slang_info(term)
-    if not info:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Slang term '{term}' not found"
-        )
-    return {
-        "term": term,
-        **info
-    }
-
-
-@app.post("/api/discover-slang")
-def manual_discovery(request: DiscoverRequest):
-    """Manually trigger slang discovery"""
-    print(f"\n🔍 Manual discovery for: {request.topics}")
-    
-    # Fetch videos
-    shorts_data = fetcher.fetch_shorts(request.topics)
-    
-    # Collect comments
-    all_comments = []
-    for short in shorts_data:
-        all_comments.extend(short.get('comments_with_slang', []))
-    
-    print(f"💬 Analyzing {len(all_comments)} comments...")
-    
-    # Discover
-    new_slang = slang_discovery.discover_new_slang(
-        all_comments, 
-        auto_approve=request.auto_approve
-    )
-    
-    return {
-        "discovered": len(new_slang),
-        "terms": new_slang,
-        "auto_approved": request.auto_approve
-    }
-
 
 @app.delete("/api/slang/{term}")
 def delete_slang(term: str):
@@ -418,38 +454,11 @@ def delete_slang(term: str):
     return {"message": f"Deleted '{term}'"}
 
 
-@app.get("/api/stats")
-def get_stats():
-    """Get system statistics"""
-    from collections import Counter
-    
-    categories = [
-        info.get('category', 'unknown') 
-        for info in slang_discovery.slang_database.values()
-    ]
-    category_counts = dict(Counter(categories))
-    
-    return {
-        "cached_videos": len(cached_shorts),
-        "total_slang_terms": len(slang_discovery.slang_database),
-        "slang_by_category": category_counts,
-        "most_common_category": max(category_counts.items(), key=lambda x: x[1])[0] if category_counts else None
-    }
+# --- AI EVALUATION ENDPOINTS ---
 
-# Stage 1: Evaluate user comment and return score with social validation
 @app.post("/api/evaluate", response_model=EvaluateResponse)
 def evaluate_comment(request: EvaluateRequest):
-    """
-    Evaluate a user's comment on a video.
-
-    Returns:
-        - score (0-100): Overall evaluation score (capped at 50 if no slang used)
-        - grammarScore, contextScore, naturalnessScore: Breakdown
-        - likes: Percentage of video's likes (realistic social validation)
-        - correction: Corrected version of comment
-        - mistakes: Array of identified errors
-        - goodParts: Array of positive aspects
-    """
+    """Evaluate a user's comment on a video."""
     try:
         evaluation = groq_evaluator.evaluate_comment(
             video_title=request.videoTitle,
@@ -464,20 +473,9 @@ def evaluate_comment(request: EvaluateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
 
-
-# Stage 2: Generate multiple AI responses with roast-with-love personalities
 @app.post("/api/respond", response_model=RespondResponse)
 def generate_ai_response(request: RespondRequest):
-    """
-    Generate multiple Gen Z style AI responses to user's comment.
-    Number of responses scales with comment quality (1-5 responses based on score).
-
-    Returns:
-        - responses: List of 1-5 AI responses (score-based), each with:
-            - aiComment: TikTok-style roast-with-love feedback (tone matches score tier)
-            - authorName: Groq-generated Gen Z username
-            - likes: Random engagement count (10-500)
-    """
+    """Generate multiple Gen Z style AI responses to user's comment."""
     try:
         responses = groq_evaluator.generate_multiple_responses(
             user_comment=request.userComment,
@@ -493,17 +491,9 @@ def generate_ai_response(request: RespondRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Response generation error: {str(e)}")
 
-# Stage 3: Explain YouTube comments with slang translations
 @app.post("/api/explain-comment", response_model=ExplainCommentResponse)
 def explain_comment(request: ExplainCommentRequest):
-    """
-    Explain a YouTube comment by translating it to simpler language
-    and breaking down each slang term.
-
-    Returns:
-        - translation: The comment rewritten in simple language without slang
-        - slangBreakdown: Array of objects with term, definition, and usage
-    """
+    """Explain a YouTube comment by translating it to simpler language and breaking down each slang term."""
     if not groq_evaluator:
         raise HTTPException(status_code=503, detail="AI response service not available. Please check Groq API key.")
     
@@ -518,33 +508,69 @@ def explain_comment(request: ExplainCommentRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
 
-
-# Stage 4: Suggest related slang based on learned terms
-@app.post("/api/suggest-slang", response_model=SuggestSlangResponse)
-def suggest_slang(request: SuggestSlangRequest):
-    """
-    Suggest related slang terms based on what the user has learned.
-    Uses AI to identify terms that are commonly used together or in similar contexts.
-
-    Returns:
-        - suggestions: Array of suggested slang terms with definitions, reasons, and categories
-    """
-    try:
-        suggestions = groq_evaluator.suggest_related_slang(
-            learned_terms=request.learnedTerms,
-            slang_database=slang_discovery.slang_database
-        )
-        return {"suggestions": suggestions}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Suggestion error: {str(e)}")
-
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "="*60)
     print("🚀 Starting Slang Learning Backend")
     print("="*60)
-    print(f"📚 Loaded {len(slang_discovery.slang_database)} slang terms")
-    print(f"🎯 Fetcher configured with {len(fetcher.slang_terms)} terms")
+    print(f"📚 Loaded {len(slang_discovery.get_all_slang_terms())} slang terms")
     print("="*60 + "\n")
     uvicorn.run(app, host="127.0.0.1", port=3001, reload=True)
+
+@app.post("/api/train-cache")
+def train_cache():
+    """
+    NEW: Triggers the AI discovery flow using comments from all videos currently in the cache.
+    This trains the AI on videos that the user is currently seeing, regardless of initial slang count.
+    """
+    print("\n🧠 Training started using all currently cached comments.")
     
+    # 1. Collect ALL videos from the DB (using default cache parameters for a wide pull)
+    # We use aggressive shorts/comments to ensure we retrieve max data points from cache.
+    config_params = {
+        "topics": ["gaming", "food review", "funny moments", "dance", "pets"],
+        "shorts_per_topic": 15, # Try to pull deep cache
+        "comments_per_short": 30
+    }
+    
+    # Using a fake/expired cache entry lookup to force retrieval of all known data points
+    cached_videos = db.get_cached_videos(
+        topics=config_params['topics'],
+        custom_slang=[],
+        shorts_per_topic=config_params['shorts_per_topic'],
+        comments_per_short=config_params['comments_per_short']
+    )
+    
+    if not cached_videos:
+        return {"message": "Cache is empty. Please refresh the video feed first."}
+
+    # 2. Collect ALL comments for the discovery process
+    all_comments = []
+    for short in cached_videos:
+        all_comments.extend(short.get('comments_with_slang', []))
+    
+    # Check if we have enough comments, otherwise the function won't be able to run
+    if len(all_comments) < 20:
+        return {"message": f"Collected only {len(all_comments)} comments from cache. Need 20+ to run AI verification."}
+        
+    print(f"💬 Collected {len(all_comments)} comments from cache for training.")
+
+    # 3. STAGE 1 & 2: Local Filter, AI Verification, and Save
+    # This automatically calls extract_slang_candidates_with_context internally
+    new_slang = slang_discovery.process_discovery_flow(all_comments)
+    
+    # Update fetcher with newly discovered slang
+    fetcher.slang_terms = slang_discovery.get_all_slang_terms()
+
+    return {
+        "message": "Cache training complete.",
+        "discovered": len(new_slang),
+        "total_slang_terms_now": len(fetcher.slang_terms),
+        "new_terms": [
+            {
+                "term": s['term'],
+                "definition": s['definition'],
+                "category": s['category']
+            } for s in new_slang
+        ]
+    }
