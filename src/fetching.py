@@ -2,6 +2,7 @@ import requests
 import json
 from typing import List, Dict
 import re
+from slangTerms import slangTerms
 
 class YouTubeShortsSlangFetcher:
     """
@@ -14,14 +15,7 @@ class YouTubeShortsSlangFetcher:
         self.base_url = "https://www.googleapis.com/youtube/v3"
         
         # Popular slang terms to search for
-        self.slang_terms = {
-            'fr', 'ngl', 'tbh', 'smh', 'imo', 'lol', 'lmao', 
-            'bruh', 'bet', 'bussin', 'sheesh', 'sigma', 'lit', 
-            'lowkey', 'highkey', 'cap', 'nocap', 'vibe', 'vibes',
-            'slay', 'goat', 'savage', 'flex', 'sus', 'mid',
-            'w', 'l', 'ratio', 'fam', 'stan', 'simp', 'based',
-            'yeet', 'slaps', 'valid', 'mood', 'hits different'
-        }
+        self.slang_terms = slangTerms
     
     def search_shorts(self, query: str, max_results: int = 20) -> List[Dict]:
         """
@@ -183,20 +177,29 @@ class YouTubeShortsSlangFetcher:
         ascii_ratio = sum(c.isascii() for c in text) / max(len(text), 1)
         return ascii_ratio > 0.8
     
+
     def detect_slang_in_text(self, text: str) -> List[str]:
         """
-        Detect which slang terms appear in text with accurate word boundary matching
+        Detect slang terms accurately with context filtering.
         """
         text_lower = text.lower()
-        found_slang = []
-        
-        for slang in self.slang_terms:
-            # Use word boundaries to match exact words only
+        found = []
+
+        for slang in self.slang_terms.keys():
+            # Exact word match (avoid matching inside words)
             pattern = r'\b' + re.escape(slang) + r'\b'
             if re.search(pattern, text_lower):
-                found_slang.append(slang)
-        
-        return found_slang
+                # Context filters for ambiguous slang
+                if slang == 'l' and re.search(r'welcome|jelly', text_lower):
+                    continue
+                if slang == 'w' and re.search(r'what|why|ow|sw', text_lower):
+                    continue
+                if slang == 'fire' and re.search(r'fire alarm|on fire|building fire', text_lower):
+                    continue
+
+                found.append(slang)
+
+        return found
     
     def fetch_shorts_with_slang_comments(self, topics: List[str], 
                                          shorts_per_topic: int = 10,
@@ -352,7 +355,7 @@ if __name__ == "__main__":
         print()
     
     # Save
-    filename = input("💾 Save as (default: shorts_data.json): ").strip() or "shorts_data.json"
+    filename = input("💾 Save as (default: youtube_shorts_slang_data.json): ").strip() or "youtube_shorts_slang_data.json"
     fetcher.save_to_json(shorts_data, filename)
     
     print("\n✅ Done! Use the JSON file in your frontend app.")
