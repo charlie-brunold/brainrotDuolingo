@@ -39,6 +39,7 @@ export default function BrainrotTikTok({ shortsData }) {
   const [feedback, setFeedback] = useState(null);
   const [touchStart, setTouchStart] = useState(0); // NEW: Track Y position on touch start
   const [touchEnd, setTouchEnd] = useState(0);   // NEW: Track Y position on touch end
+  const [isEvaluating, setIsEvaluating] = useState(false); // NEW: Loading state for API calls
   const containerRef = useRef(null);
   
   // Use provided shortsData or fallback
@@ -125,98 +126,124 @@ export default function BrainrotTikTok({ shortsData }) {
     setComment(prev => prev + (prev ? ' ' : '') + slang + ' ');
   };
 
-  const analyzeComment = (commentText) => {
-    const words = commentText.toLowerCase().split(/\s+/);
-    const usedSlang = [];
-    const correctUsage = [];
-    const incorrectUsage = [];
+  // --- API Integration Functions ---
 
-    words.forEach(word => {
-      const cleanWord = word.replace(/[^a-z]/g, '');
-      if (SLANG_TERMS[cleanWord]) {
-        usedSlang.push(cleanWord);
-        
-        // Mock usage correctness check
-        const isCorrectContext = Math.random() > 0.3; 
-        if (isCorrectContext) {
-          correctUsage.push(cleanWord);
-        } else {
-          incorrectUsage.push(cleanWord);
-        }
+  const evaluateCommentWithAI = async (commentText) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/evaluate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoTitle: currentVideo.title || 'Untitled Video',
+          videoDescription: currentVideo.description || '',
+          userComment: commentText,
+          targetLanguage: 'English', // TODO: Make this configurable
+          videoViewCount: currentVideo.view_count || 0,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to evaluate comment');
       }
-    });
 
-    return { usedSlang, correctUsage, incorrectUsage };
-  };
-
-  const generateAIResponses = (commentText, analysis) => {
-    const positiveResponses = [
-      "fr fr no cap 💯", "You ate with this comment 🔥", "This is so real", 
-      "Facts bro 👑", "Based comment", "W comment section", "Bro is spitting facts", 
-      "You're cooking with this one 🔥",
-    ];
-    const negativeResponses = [
-      "Nah you're cooked for this take 💀", "Ratio 📊", "This ain't it chief", 
-      "Mid comment ngl", "Bro is not him 💀",
-    ];
-    const neutralResponses = [
-      "Interesting take 🤔", "I see what you did there", "Fair point tbh", 
-      "Valid but hear me out",
-    ];
-
-    const score = analysis.usedSlang.length > 0 ? (analysis.correctUsage.length / analysis.usedSlang.length) : 0.5;
-    const allResponses = [];
-    
-    // Logic to select responses based on comment "score"
-    if (score >= 0.7) {
-      for (let i = 0; i < 3; i++) allResponses.push(positiveResponses[Math.floor(Math.random() * positiveResponses.length)]);
-    } else if (score >= 0.4) {
-      for (let i = 0; i < 3; i++) {
-        const pool = [...positiveResponses, ...neutralResponses];
-        allResponses.push(pool[Math.floor(Math.random() * pool.length)]);
-      }
-    } else {
-      for (let i = 0; i < 3; i++) {
-        const pool = [...negativeResponses, ...neutralResponses];
-        allResponses.push(pool[Math.floor(Math.random() * pool.length)]);
-      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error evaluating comment:', error);
+      throw error;
     }
-
-    return allResponses.filter((v, i, a) => a.indexOf(v) === i); // Return unique responses
   };
 
-  const handleSubmitComment = () => {
-    if (!comment.trim()) return;
+  const generateAIResponse = async (commentText, evaluation) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/respond', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userComment: commentText,
+          score: evaluation.score,
+          mistakes: evaluation.mistakes || [],
+          correction: evaluation.correction || '',
+          videoTitle: currentVideo.title || 'Untitled Video',
+          targetLanguage: 'English', // TODO: Make this configurable
+        }),
+      });
 
-    const analysis = analyzeComment(comment);
-    const aiResponses = generateAIResponses(comment, analysis);
+      if (!response.ok) {
+        throw new Error('Failed to generate AI response');
+      }
 
-    const newComment = {
-      id: Date.now(),
-      text: comment,
-      user: 'You',
-      likes: Math.floor(Math.random() * 100),
-      analysis,
-      aiResponses
-    };
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+      throw error;
+    }
+  };
 
-    setUserComments(prev => [newComment, ...prev]);
-    
-    const totalSlang = analysis.usedSlang.length;
-    const correctCount = analysis.correctUsage.length;
-    const score = totalSlang > 0 ? (correctCount / totalSlang) * 100 : 0;
+  const handleSubmitComment = async () => {
+    if (!comment.trim() || isEvaluating) return;
 
-    setFeedback({
-      score,
-      usedSlang: analysis.usedSlang,
-      correctUsage: analysis.correctUsage,
-      incorrectUsage: analysis.incorrectUsage,
-      message: score >= 80 ? "You're cooking! 🔥" : score >= 50 ? "Not bad, keep practicing!" : "Keep learning the slang!"
-    });
+    setIsEvaluating(true);
 
-    setShowFeedback(true);
-    setComment('');
-    setTimeout(() => setShowFeedback(false), 5000);
+    try {
+      // Step 1: Evaluate the comment with AI
+      const evaluation = await evaluateCommentWithAI(comment);
+
+      // Step 2: Generate AI response
+      const aiResponse = await generateAIResponse(comment, evaluation);
+
+      // Step 3: Create comment with AI response
+      const newComment = {
+        id: Date.now(),
+        text: comment,
+        user: 'You',
+        likes: evaluation.likes,
+        evaluation,
+        aiResponses: [aiResponse.aiComment] // Array for consistency with old structure
+      };
+
+      setUserComments(prev => [newComment, ...prev]);
+
+      // Step 4: Show feedback
+      setFeedback({
+        score: evaluation.score,
+        grammarScore: evaluation.grammarScore,
+        contextScore: evaluation.contextScore,
+        naturalnessScore: evaluation.naturalnessScore,
+        correction: evaluation.correction,
+        mistakes: evaluation.mistakes,
+        goodParts: evaluation.goodParts,
+        message: evaluation.score >= 80
+          ? "You're cooking! 🔥"
+          : evaluation.score >= 50
+          ? "Not bad, keep practicing!"
+          : "Keep learning!"
+      });
+
+      setShowFeedback(true);
+      setComment('');
+      setTimeout(() => setShowFeedback(false), 8000);
+    } catch (error) {
+      console.error('Error submitting comment:', error);
+
+      // Show error feedback
+      setFeedback({
+        score: 0,
+        message: "Oops! Couldn't evaluate your comment. Check if the backend is running.",
+        mistakes: [],
+        goodParts: [],
+        correction: comment
+      });
+      setShowFeedback(true);
+      setTimeout(() => setShowFeedback(false), 5000);
+    } finally {
+      setIsEvaluating(false);
+    }
   };
 
   // --- Render Logic ---
@@ -380,15 +407,29 @@ export default function BrainrotTikTok({ shortsData }) {
                     </div>
                     <div className="flex-1">
                       <div className="text-white font-bold mb-1">{feedback.message}</div>
-                      <div className="text-white/90 text-sm mb-2">Score: {Math.round(feedback.score)}%</div>
-                      {feedback.correctUsage.length > 0 && (
-                        <div className="text-green-300 text-xs mb-1">
-                          ✓ Correct: {feedback.correctUsage.join(', ')}
+                      <div className="text-white/90 text-sm mb-2">
+                        Overall Score: {Math.round(feedback.score)}%
+                      </div>
+                      {feedback.grammarScore !== undefined && (
+                        <div className="text-white/80 text-xs mb-2 flex gap-3">
+                          <span>Grammar: {feedback.grammarScore}%</span>
+                          <span>Context: {feedback.contextScore}%</span>
+                          <span>Natural: {feedback.naturalnessScore}%</span>
                         </div>
                       )}
-                      {feedback.incorrectUsage.length > 0 && (
+                      {feedback.correction && feedback.correction !== comment && (
+                        <div className="text-green-300 text-xs mb-1">
+                          ✓ Corrected: {feedback.correction}
+                        </div>
+                      )}
+                      {feedback.goodParts && feedback.goodParts.length > 0 && (
+                        <div className="text-green-300 text-xs mb-1">
+                          ✓ Good: {feedback.goodParts.join(', ')}
+                        </div>
+                      )}
+                      {feedback.mistakes && feedback.mistakes.length > 0 && (
                         <div className="text-red-300 text-xs mb-1">
-                          ✗ Check usage: {feedback.incorrectUsage.join(', ')}
+                          ✗ Mistakes: {feedback.mistakes.join(', ')}
                         </div>
                       )}
                     </div>
@@ -463,18 +504,28 @@ export default function BrainrotTikTok({ shortsData }) {
                     type="text"
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSubmitComment()}
-                    placeholder="Add a comment..."
-                    className="flex-1 bg-gray-700 text-white rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    onKeyPress={(e) => e.key === 'Enter' && !isEvaluating && handleSubmitComment()}
+                    placeholder={isEvaluating ? "Evaluating..." : "Add a comment..."}
+                    disabled={isEvaluating}
+                    className="flex-1 bg-gray-700 text-white rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
                   />
                   <button
                     onClick={handleSubmitComment}
-                    disabled={!comment.trim()}
-                    className="p-2 bg-purple-600 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!comment.trim() || isEvaluating}
+                    className="p-2 bg-purple-600 rounded-full disabled:opacity-50 disabled:cursor-not-allowed relative"
                   >
-                    <Send className="w-5 h-5 text-white" />
+                    {isEvaluating ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5 text-white" />
+                    )}
                   </button>
                 </div>
+                {isEvaluating && (
+                  <div className="text-white/60 text-xs mt-2 text-center">
+                    AI is evaluating your comment...
+                  </div>
+                )}
               </div>
             </div>
           </div>
