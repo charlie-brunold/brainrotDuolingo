@@ -373,23 +373,22 @@ export default function BrainrotTikTok({ shortsData }) {
         </div>
 
         {/* Navigation Arrows */}
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-20">
-          <button
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50">
+        <button
             onClick={() => scrollToVideo(currentVideoIndex - 1)}
-            disabled={currentVideoIndex === 0 || showComments} // Added showComments disable
-            className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30"
-          >
+            disabled={currentVideoIndex === 0 || showComments}
+            className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30 hover:bg-white/30 transition-colors"
+        >
             <ChevronUp className="w-6 h-6 text-white" />
-          </button>
-          <button
+        </button>
+        <button
             onClick={() => scrollToVideo(currentVideoIndex + 1)}
-            disabled={currentVideoIndex === VIDEOS.length - 1 || showComments} // Added showComments disable
-            className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30"
-          >
+            disabled={currentVideoIndex === VIDEOS.length - 1 || showComments}
+            className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30 hover:bg-white/30 transition-colors"
+        >
             <ChevronDown className="w-6 h-6 text-white" />
-          </button>
+        </button>
         </div>
-
         {/* Right Sidebar */}
         <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center z-10">
           <div className="flex flex-col items-center gap-1">
