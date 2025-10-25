@@ -52,15 +52,14 @@ export default function HomePage({ onStartFetching }) {
 
   // Start fetching
   const handleStart = () => {
-    alert('Button clicked!'); // Test if button works at all
     
     const finalTopics = topics.length > 0 ? topics : defaultTopics;
     
     const config = {
       topics: finalTopics,
-      customSlang: customSlang,
-      shortsPerTopic: shortsPerTopic,
-      commentsPerShort: commentsPerShort
+      custom_slang: customSlang || [],       // rename to match backend param
+      shorts_per_topic: shortsPerTopic,
+      comments_per_short: commentsPerShort
     };
     
     console.log('🚀 Starting with config:', config);
