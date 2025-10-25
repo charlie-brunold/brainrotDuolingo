@@ -129,7 +129,19 @@ export default function BrainrotTikTok({ shortsData }) {
 
   useEffect(() => {
     if (currentVideo && currentVideo.unique_slang_terms) {
-      const suggestions = currentVideo.unique_slang_terms.slice(0, 3);
+      // Get all slang terms from dictionary
+      const allSlangTerms = Object.keys(SLANG_TERMS);
+
+      // Filter out forbidden slang (from example comments)
+      const forbiddenSlang = currentVideo.unique_slang_terms.map(s => s.toLowerCase());
+      const allowedSlang = allSlangTerms.filter(
+        term => !forbiddenSlang.includes(term.toLowerCase())
+      );
+
+      // Randomly select 3 alternative slang terms
+      const shuffled = [...allowedSlang].sort(() => Math.random() - 0.5);
+      const suggestions = shuffled.slice(0, 3);
+
       setSuggestedSlang(suggestions);
     }
   }, [currentVideoIndex, currentVideo]);
@@ -154,6 +166,7 @@ export default function BrainrotTikTok({ shortsData }) {
           targetLanguage: 'English', // TODO: Make this configurable
           videoLikeCount: currentVideo.like_count || 0,
           availableSlang: currentVideo.unique_slang_terms || [],
+          forbiddenSlang: currentVideo.unique_slang_terms || [], // Slang from example comments
         }),
       });
 
@@ -184,6 +197,7 @@ export default function BrainrotTikTok({ shortsData }) {
           videoTitle: currentVideo.title || 'Untitled Video',
           targetLanguage: 'English', // TODO: Make this configurable
           availableSlang: currentVideo.unique_slang_terms || [],
+          forbiddenSlang: currentVideo.unique_slang_terms || [], // Slang from example comments
         }),
       });
 
@@ -597,8 +611,8 @@ export default function BrainrotTikTok({ shortsData }) {
                 <div className="flex items-start gap-2">
                   <Sparkles className="w-5 h-5 text-white flex-shrink-0 mt-1" />
                   <div>
-                    <div className="text-white font-semibold mb-1">Practice with real comments!</div>
-                    <div className="text-white/90 text-sm">Try using the slang from this video</div>
+                    <div className="text-white font-semibold mb-1">Use NEW slang (not from examples!)</div>
+                    <div className="text-white/90 text-sm">Try different slang than what's in the comments</div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <span className="text-white/80 text-xs">Suggested:</span>
                       {suggestedSlang.map(slang => (
