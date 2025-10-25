@@ -260,7 +260,8 @@ export default function BrainrotTikTok({ shortsData }) {
           example: slang.usage,
           learnedAt: Date.now(),
           videoTitle: currentVideo.title,
-          videoId: currentVideo.video_id
+          videoId: currentVideo.video_id,
+          commentText: commentText  // Save the original comment for context
         }));
 
         setMySlang(prev => {
@@ -801,18 +802,49 @@ export default function BrainrotTikTok({ shortsData }) {
                     {mySlang.map((slang, index) => (
                       <div
                         key={index}
-                        className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-white/10 hover:border-white/30 transition-all"
+                        className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl overflow-hidden border border-white/10 hover:border-white/30 transition-all"
                       >
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="text-white text-xl font-bold">{slang.term}</h3>
-                          <Sparkles className="w-5 h-5 text-yellow-300" />
-                        </div>
-                        <p className="text-white/80 text-sm mb-3">{slang.definition}</p>
-                        <div className="bg-black/30 rounded-lg p-2 mb-3">
-                          <p className="text-white/60 text-xs italic">"{slang.example}"</p>
-                        </div>
-                        <div className="flex items-center gap-2 text-white/40 text-xs">
-                          <span>From: {slang.videoTitle?.substring(0, 30)}{slang.videoTitle?.length > 30 ? '...' : ''}</span>
+                        {/* YouTube Thumbnail Header */}
+                        {slang.videoId && (
+                          <div className="relative h-32 bg-black/50">
+                            <img
+                              src={`https://img.youtube.com/vi/${slang.videoId}/mqdefault.jpg`}
+                              alt={slang.videoTitle}
+                              className="w-full h-full object-cover opacity-80"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                          </div>
+                        )}
+
+                        <div className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="text-white text-xl font-bold">{slang.term}</h3>
+                            <Sparkles className="w-5 h-5 text-yellow-300" />
+                          </div>
+                          <p className="text-white/80 text-sm mb-3">{slang.definition}</p>
+                          <div className="bg-black/30 rounded-lg p-2 mb-3">
+                            <p className="text-white/60 text-xs italic">"{slang.example}"</p>
+                          </div>
+
+                          {/* Original Comment Context */}
+                          {slang.commentText && (
+                            <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-3 mb-3 border border-blue-500/20">
+                              <p className="text-blue-300 text-xs font-semibold mb-1">Original Comment:</p>
+                              <p className="text-white/70 text-xs leading-relaxed">"{slang.commentText}"</p>
+                            </div>
+                          )}
+
+                          <a
+                            href={`https://www.youtube.com/shorts/${slang.videoId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs transition-colors group"
+                          >
+                            <span>From: {slang.videoTitle?.substring(0, 30)}{slang.videoTitle?.length > 30 ? '...' : ''}</span>
+                            <svg className="w-3 h-3 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
                         </div>
                       </div>
                     ))}
