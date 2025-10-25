@@ -529,7 +529,7 @@ export default function BrainrotTikTok({ shortsData }) {
               </div>
 
         {/* Navigation Arrows */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50" style={{ pointerEvents: 'auto' }}>
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-10" style={{ pointerEvents: 'auto' }}>
         <button
             onClick={() => scrollToVideo(currentVideoIndex - 1)}
             disabled={currentVideoIndex === 0 || showComments}
@@ -589,8 +589,8 @@ export default function BrainrotTikTok({ shortsData }) {
 
         {/* Comments Section Overlay */}
         {showComments && (
-          <div 
-            className="absolute inset-0 bg-black/50 z-30"
+          <div
+            className="absolute inset-0 bg-black/50 z-40"
             onClick={() => setShowComments(false)}
             style={{ pointerEvents: 'auto' }}
           >
