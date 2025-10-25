@@ -25,3 +25,10 @@ yarn-error.log*
 node_modules/
 build/
 .env
+
+__pycache__/
+*.pyc
+venv/
+
+__pycache__/
+*.pyc
