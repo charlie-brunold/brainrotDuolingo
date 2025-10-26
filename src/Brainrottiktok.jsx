@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'; 
-import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Check, Plus } from 'lucide-react';
 import MySlang from './Myslang.jsx';
- 
 
 // --- SLANG TERMS (Static Data) ---
 const SLANG_TERMS = {
@@ -32,6 +31,39 @@ const SLANG_TERMS = {
 };
 
 export default function BrainrotTikTok({ shortsData }) {
+  const COMMON_WORDS = new Set([
+    // Articles & pronouns
+    'a', 'an', 'the', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'their', 'our', 'mine', 'yours', 'hers', 'ours', 'theirs',
+  
+    // Basic verbs
+    'be', 'am', 'is', 'are', 'was', 'were', 'been', 'being', 
+    'have', 'has', 'had', 'do', 'does', 'did', 'go', 'goes', 'went', 'gone', 
+    'get', 'gets', 'got', 'make', 'makes', 'made', 'see', 'saw', 'seen',
+    'come', 'came', 'know', 'knew', 'known', 'think', 'thought', 
+    'say', 'says', 'said', 'want', 'like', 'need', 'can', 'could', 'will', 'would', 'shall', 'should', 'may', 'might', 'must',
+  
+    // Common nouns
+    'man', 'woman', 'boy', 'girl', 'people', 'time', 'day', 'year', 'thing', 'person', 'world', 'school', 'place', 'home', 'life', 'hand', 'eye', 'work', 'week', 'way', 'child', 'friend', 'family',
+  
+    // Common adjectives
+    'good', 'bad', 'new', 'old', 'first', 'last', 'long', 'short', 'big', 'small', 'great', 'little', 'other', 'same', 'different', 'young', 'right', 'left', 'happy', 'sad', 'easy', 'hard',
+  
+    // Prepositions
+    'in', 'on', 'at', 'by', 'with', 'from', 'to', 'for', 'of', 'about', 'over', 'under', 'between', 'into', 'through', 'before', 'after', 'around', 'against', 'without', 'the', 'that', 'this',
+  
+    // Conjunctions
+    'and', 'or', 'but', 'because', 'so', 'if', 'when', 'while', 'than', 'though', 'although', 'as',
+  
+    // Common adverbs
+    'very', 'really', 'just', 'now', 'then', 'there', 'here', 'always', 'never', 'sometimes', 'often', 'again', 'too', 'enough',
+  
+    // Numbers
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'hundred', 'thousand',
+  
+    // Miscellaneous
+    'yes', 'no', 'not', 'ok', 'okay', 'hello', 'hi', 'bye', 'thanks', 'thank', 'please'
+  ]);
+  
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
@@ -39,41 +71,45 @@ export default function BrainrotTikTok({ shortsData }) {
   const [suggestedSlang, setSuggestedSlang] = useState([]);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const [touchStart, setTouchStart] = useState(0); // NEW: Track Y position on touch start
-  const [touchEnd, setTouchEnd] = useState(0);   // NEW: Track Y position on touch end
-  const [isEvaluating, setIsEvaluating] = useState(false); // NEW: Loading state for API calls
-  const [explanations, setExplanations] = useState({}); // Cache for comment explanations
-  const [activeExplanation, setActiveExplanation] = useState(null); // Which comment has tooltip visible
-  const [loadingExplanation, setLoadingExplanation] = useState(null); // Which comment is loading
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [explanations, setExplanations] = useState({});
+  const [activeExplanation, setActiveExplanation] = useState(null);
+  const [loadingExplanation, setLoadingExplanation] = useState(null);
   const [mySlang, setMySlang] = useState(() => {
-    // Load from sessionStorage on mount
     const saved = sessionStorage.getItem('brainrot_my_slang');
     return saved ? JSON.parse(saved) : [];
-  }); // Array of learned slang with metadata
-  const [showMySlang, setShowMySlang] = useState(false); // Toggle for My Slang overlay
-  const [suggestions, setSuggestions] = useState([]); // AI-suggested slang terms
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false); // Loading state for suggestions
-  const [isVideoReady, setIsVideoReady] = useState(false); // Track if first video is ready
+  });
+  const [showMySlang, setShowMySlang] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const containerRef = useRef(null);
   
-  // Use provided shortsData or fallback
   const VIDEOS = shortsData || [];
   const currentVideo = VIDEOS[currentVideoIndex];
   const videoId = currentVideo?.url ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
 
-  // Force first video to load properly
+  const [hoveredWord, setHoveredWord] = useState(null);
+  const [tooltipLocked, setTooltipLocked] = useState(false);
+  const [wordPosition, setWordPosition] = useState({ x: 0, y: 0 });
+  const [loadingDefinition, setLoadingDefinition] = useState(false);
+  const [definitionCache, setDefinitionCache] = useState({});
+  const [hoverTimeoutId, setHoverTimeoutId] = useState(null);
+  const [knownWords, setKnownWords] = useState(() => {
+    const saved = sessionStorage.getItem('brainrot_known_words');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   useEffect(() => {
     if (currentVideoIndex === 0 && !isVideoReady) {
-      // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         setIsVideoReady(true);
       }, 100);
       return () => clearTimeout(timer);
     }
   }, [currentVideoIndex, isVideoReady]);
-
-
-  // --- Helper Functions ---
 
   const formatNumber = (num) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -84,7 +120,6 @@ export default function BrainrotTikTok({ shortsData }) {
   const scrollToVideo = (index) => {
     if (index >= 0 && index < VIDEOS.length) {
       setCurrentVideoIndex(index);
-      // Reset state for the new video
       setShowComments(false);
       setUserComments([]);
       setComment('');
@@ -92,18 +127,14 @@ export default function BrainrotTikTok({ shortsData }) {
     }
   };
 
-  // --- Scroll/Swipe Handlers (FIXED/IMPROVED) ---
-  
   const handleWheel = (e) => {
-    // Prevent scrolling if comments are open
     if (showComments) {
-        return; // Do nothing while comments are open
+        return;
     } 
 
-    // 2. Switch video based on wheel direction
-    if (e.deltaY > 0) { // Scroll Down
+    if (e.deltaY > 0) {
       scrollToVideo(currentVideoIndex + 1);
-    } else { // Scroll Up
+    } else {
       scrollToVideo(currentVideoIndex - 1);
     }
   };
@@ -120,24 +151,19 @@ export default function BrainrotTikTok({ shortsData }) {
 
   const handleTouchEnd = () => {
     if (showComments) return;
-    const SWIPE_THRESHOLD = 50; // Minimum vertical distance for a swipe
+    const SWIPE_THRESHOLD = 50;
 
-    // Swiping UP (Start Y > End Y)
     if (touchStart - touchEnd > SWIPE_THRESHOLD) {
       scrollToVideo(currentVideoIndex + 1);
     }
 
-    // Swiping DOWN (Start Y < End Y)
     if (touchStart - touchEnd < -SWIPE_THRESHOLD) {
       scrollToVideo(currentVideoIndex - 1);
     }
     
-    // Reset touch state
     setTouchStart(0);
     setTouchEnd(0);
   };
-
-  // --- Comment Logic ---
 
   useEffect(() => {
     if (currentVideo && currentVideo.unique_slang_terms) {
@@ -150,8 +176,6 @@ export default function BrainrotTikTok({ shortsData }) {
     setComment(prev => prev + (prev ? ' ' : '') + slang + ' ');
   };
 
-  // --- API Integration Functions ---
-
   const evaluateCommentWithAI = async (commentText) => {
     try {
       const response = await fetch('http://localhost:3001/api/evaluate', {
@@ -163,7 +187,7 @@ export default function BrainrotTikTok({ shortsData }) {
           videoTitle: currentVideo.title || 'Untitled Video',
           videoDescription: currentVideo.description || '',
           userComment: commentText,
-          targetLanguage: 'English', // TODO: Make this configurable
+          targetLanguage: 'English',
           videoLikeCount: currentVideo.like_count || 0,
           availableSlang: currentVideo.unique_slang_terms || [],
         }),
@@ -194,7 +218,7 @@ export default function BrainrotTikTok({ shortsData }) {
           mistakes: evaluation.mistakes || [],
           correction: evaluation.correction || '',
           videoTitle: currentVideo.title || 'Untitled Video',
-          targetLanguage: 'English', // TODO: Make this configurable
+          targetLanguage: 'English',
           availableSlang: currentVideo.unique_slang_terms || [],
         }),
       });
@@ -204,7 +228,6 @@ export default function BrainrotTikTok({ shortsData }) {
       }
 
       const data = await response.json();
-      // data now contains { responses: [{aiComment, authorName, likes}, ...] }
       return data.responses;
     } catch (error) {
       console.error('Error generating AI response:', error);
@@ -240,33 +263,27 @@ export default function BrainrotTikTok({ shortsData }) {
   };
 
   const handleExplainClick = async (commentId, commentText, detectedSlang) => {
-    // If this comment is already showing, just close it
     if (activeExplanation === commentId) {
       setActiveExplanation(null);
       return;
     }
 
-    // If already cached, just show it
     if (explanations[commentId]) {
       setActiveExplanation(commentId);
       return;
     }
 
-    // Otherwise, fetch from API
     setLoadingExplanation(commentId);
     try {
       const explanation = await fetchCommentExplanation(commentId, commentText, detectedSlang);
 
-      // Cache the explanation
       setExplanations(prev => ({
         ...prev,
         [commentId]: explanation
       }));
 
-      // Show the explanation
       setActiveExplanation(commentId);
 
-      // Track slang terms learned (add to My Slang)
       if (explanation.slangBreakdown && explanation.slangBreakdown.length > 0) {
         const newSlangTerms = explanation.slangBreakdown.map(slang => ({
           term: slang.term,
@@ -278,23 +295,18 @@ export default function BrainrotTikTok({ shortsData }) {
         }));
 
         setMySlang(prev => {
-          // Filter out terms already in mySlang
           const existingTerms = new Set(prev.map(s => s.term.toLowerCase()));
           const uniqueNewTerms = newSlangTerms.filter(
             slang => !existingTerms.has(slang.term.toLowerCase())
           );
 
           const updated = [...prev, ...uniqueNewTerms];
-
-          // Save to sessionStorage
           sessionStorage.setItem('brainrot_my_slang', JSON.stringify(updated));
-
           return updated;
         });
       }
     } catch (error) {
       console.error('Failed to get explanation:', error);
-      // Show error explanation
       setExplanations(prev => ({
         ...prev,
         [commentId]: {
@@ -308,7 +320,6 @@ export default function BrainrotTikTok({ shortsData }) {
     }
   };
 
-  // Fetch AI-powered slang suggestions
   const fetchSuggestions = async () => {
     if (mySlang.length === 0) {
       setSuggestions([]);
@@ -333,12 +344,10 @@ export default function BrainrotTikTok({ shortsData }) {
 
       const data = await response.json();
 
-      // Additional frontend filtering: remove duplicates and already-learned terms
       const learnedTermsLower = new Set(mySlang.map(s => s.term.toLowerCase()));
       const seenSuggestions = new Set();
       const filteredSuggestions = (data.suggestions || []).filter(suggestion => {
         const termLower = suggestion.term.toLowerCase();
-        // Skip if already learned or duplicate in suggestions
         if (learnedTermsLower.has(termLower) || seenSuggestions.has(termLower)) {
           return false;
         }
@@ -355,7 +364,210 @@ export default function BrainrotTikTok({ shortsData }) {
     }
   };
 
-  // Fetch suggestions when My Slang overlay is opened
+  const tokenizeText = (text) => {
+    if (!text) return [];
+    
+    const words = text.split(/(\s+)/);
+    const tokens = [];
+    
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const cleanWord = word.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+      
+      // Skip whitespace and very short words
+      if (!cleanWord || cleanWord.length < 2) {
+        tokens.push({
+          text: word,
+          isWord: false
+        });
+        continue;
+      }
+      
+      // Skip common words - don't make them hoverable
+      if (COMMON_WORDS.has(cleanWord)) {
+        tokens.push({
+          text: word,
+          isWord: false
+        });
+        continue;
+      }
+      
+      const isKnown = knownWords.includes(cleanWord);
+      const isLearned = mySlang.some(s => s.term.toLowerCase() === cleanWord);
+      
+      tokens.push({
+        text: word,
+        isWord: true,
+        cleanWord: cleanWord,
+        isKnown: isKnown,
+        isLearned: isLearned
+      });
+    }
+    
+    return tokens;
+  };
+
+  // Update handleWordHover function
+// Update handleWordHover to be more reliable
+const handleWordHover = async (cleanWord, event) => {
+  event.stopPropagation();
+  
+  // Clear any existing timeout
+  if (hoverTimeoutId) {
+    clearTimeout(hoverTimeoutId);
+    setHoverTimeoutId(null);
+  }
+
+  // If tooltip is locked, don't override - but allow same word to refresh
+  if (tooltipLocked && hoveredWord && hoveredWord.word !== cleanWord) {
+    return;
+  }
+  
+  const rect = event.target.getBoundingClientRect();
+  setWordPosition({
+    x: rect.left + rect.width / 2,
+    y: rect.top - 10
+  });
+
+  // Check cache first before showing loading state
+  if (definitionCache[cleanWord]) {
+    setHoveredWord(definitionCache[cleanWord]);
+    setLoadingDefinition(false);
+    return;
+  }
+
+  // Show loading state for new words
+  setLoadingDefinition(true);
+  setHoveredWord({ word: cleanWord, definition: 'Loading...', example: '' });
+
+  try {
+    const definition = await fetchWordDefinition(cleanWord);
+    setHoveredWord(definition);
+  } catch (error) {
+    console.error('Error in handleWordHover:', error);
+    setHoveredWord({
+      word: cleanWord,
+      definition: 'Failed to load definition',
+      example: ''
+    });
+  } finally {
+    setLoadingDefinition(false);
+  }
+};
+
+// Update handleWordLeave to use a ref for checking lock state
+const handleWordLeave = () => {
+  // Don't close if tooltip is locked (user is interacting with it)
+  if (tooltipLocked) return;
+  
+  // Clear any existing timeout first
+  if (hoverTimeoutId) {
+    clearTimeout(hoverTimeoutId);
+  }
+  
+  // Set a short delay before closing to allow moving to tooltip
+  const timeoutId = setTimeout(() => {
+    // Double-check lock state hasn't changed during timeout
+    setTooltipLocked((currentLocked) => {
+      if (!currentLocked) {
+        setHoveredWord(null);
+      }
+      return currentLocked;
+    });
+  }, 150);
+  
+  setHoverTimeoutId(timeoutId);
+};
+
+// Update fetchWordDefinition to not change loading state (we handle it in handleWordHover)
+const fetchWordDefinition = async (word) => {
+  // Check cache first
+  if (definitionCache[word]) {
+    return definitionCache[word];
+  }
+
+  try {
+    const response = await fetch('http://localhost:3001/api/define-word', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        word: word,
+        context: currentVideo.title || ''
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch definition');
+    }
+
+    const data = await response.json();
+    
+    // Cache the result
+    setDefinitionCache(prev => ({
+      ...prev,
+      [word]: data
+    }));
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching definition:', error);
+    return {
+      word: word,
+      definition: 'Definition not available',
+      example: ''
+    };
+  }
+};
+
+// Update handleWantToLearn and handleAlreadyKnow to properly reset state
+const handleWantToLearn = (term, definition, example) => {
+  const newSlangTerm = {
+    term: term,
+    definition: definition,
+    example: example,
+    learnedAt: Date.now(),
+    videoTitle: currentVideo.title,
+    videoId: currentVideo.video_id
+  };
+
+  setMySlang(prev => {
+    const existingTerms = new Set(prev.map(s => s.term.toLowerCase()));
+    if (existingTerms.has(term.toLowerCase())) {
+      return prev;
+    }
+    const updated = [...prev, newSlangTerm];
+    sessionStorage.setItem('brainrot_my_slang', JSON.stringify(updated));
+    return updated;
+  });
+
+  // Reset all tooltip state
+  setHoveredWord(null);
+  setTooltipLocked(false);
+  if (hoverTimeoutId) {
+    clearTimeout(hoverTimeoutId);
+    setHoverTimeoutId(null);
+  }
+};
+
+const handleAlreadyKnow = (term) => {
+  setKnownWords(prev => {
+    if (prev.includes(term)) return prev;
+    const updated = [...prev, term];
+    sessionStorage.setItem('brainrot_known_words', JSON.stringify(updated));
+    return updated;
+  });
+
+  // Reset all tooltip state
+  setHoveredWord(null);
+  setTooltipLocked(false);
+  if (hoverTimeoutId) {
+    clearTimeout(hoverTimeoutId);
+    setHoverTimeoutId(null);
+  }
+};
+
   useEffect(() => {
     if (showMySlang && mySlang.length > 0) {
       fetchSuggestions();
@@ -368,25 +580,20 @@ export default function BrainrotTikTok({ shortsData }) {
     setIsEvaluating(true);
 
     try {
-      // Step 1: Evaluate the comment with AI
       const evaluation = await evaluateCommentWithAI(comment);
-
-      // Step 2: Generate multiple AI responses
       const aiResponses = await generateAIResponse(comment, evaluation);
 
-      // Step 3: Create comment with AI responses
       const newComment = {
         id: Date.now(),
         text: comment,
         user: 'You',
         likes: evaluation.likes,
         evaluation,
-        aiResponses: aiResponses // Array of {aiComment, authorName, likes}
+        aiResponses: aiResponses
       };
 
       setUserComments(prev => [newComment, ...prev]);
 
-      // Step 4: Show feedback
       setFeedback({
         score: evaluation.score,
         grammarScore: evaluation.grammarScore,
@@ -408,7 +615,6 @@ export default function BrainrotTikTok({ shortsData }) {
     } catch (error) {
       console.error('Error submitting comment:', error);
 
-      // Show error feedback
       setFeedback({
         score: 0,
         message: "Oops! Couldn't evaluate your comment. Check if the backend is running.",
@@ -422,8 +628,6 @@ export default function BrainrotTikTok({ shortsData }) {
       setIsEvaluating(false);
     }
   };
-
-  // --- Render Logic ---
 
   if (!currentVideo) {
     return (
@@ -439,7 +643,6 @@ export default function BrainrotTikTok({ shortsData }) {
 
   return (
     <div className="h-screen w-full bg-black relative overflow-hidden flex flex-col">
-      {/* Persistent Header - Fixed at top */}
       <div className="flex-shrink-0 flex justify-center gap-8 p-4 bg-black z-50 border-b border-gray-800">
         <button
           onClick={() => setShowMySlang(true)}
@@ -449,7 +652,7 @@ export default function BrainrotTikTok({ shortsData }) {
               : 'text-white/70 hover:text-white'
           }`}
         >
-          My Slang {mySlang.length > 0 && `(${mySlang.length})`}
+          My Words {mySlang.length > 0 && `(${mySlang.length})`}
         </button>
         <button
           onClick={() => setShowMySlang(false)}
@@ -463,10 +666,8 @@ export default function BrainrotTikTok({ shortsData }) {
         </button>
       </div>
 
-      {/* Content Area - Either Video Feed or My Slang */}
       <div className="flex-1 relative overflow-hidden">
         {!showMySlang ? (
-          // Video Feed View
           <>
             <div
               ref={containerRef}
@@ -476,7 +677,6 @@ export default function BrainrotTikTok({ shortsData }) {
               onTouchEnd={handleTouchEnd}
               className="absolute inset-0"
             >
-              {/* Render only the current video */}
               {VIDEOS.map((video, index) => {
                 const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
                 const isCurrentVideo = index === currentVideoIndex;
@@ -521,295 +721,330 @@ export default function BrainrotTikTok({ shortsData }) {
                 );
               })}
             </div>   
-            {/* Overlay UI for current video */}
+
             <div className="absolute inset-0 pointer-events-none">
-              <div className="h-full w-full relative pointer-events-auto"
-                   style={{ pointerEvents: 'none' }}>
-              {/* Video Container with REAL YouTube Video - NOW JUST A PLACEHOLDER FOR POSITIONING */}
-              <div className="h-full w-full flex items-center justify-center bg-transparent" style={{ pointerEvents: 'none' }}>
-              </div>
+              <div className="h-full w-full relative pointer-events-auto" style={{ pointerEvents: 'none' }}>
+                <div className="h-full w-full flex items-center justify-center bg-transparent" style={{ pointerEvents: 'none' }}>
+                </div>
 
-        {/* Navigation Arrows */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50" style={{ pointerEvents: 'auto' }}>
-        <button
-            onClick={() => scrollToVideo(currentVideoIndex - 1)}
-            disabled={currentVideoIndex === 0 || showComments}
-            className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30 hover:bg-white/30 transition-colors"
-        >
-            <ChevronUp className="w-6 h-6 text-white" />
-        </button>
-        <button
-            onClick={() => scrollToVideo(currentVideoIndex + 1)}
-            disabled={currentVideoIndex === VIDEOS.length - 1 || showComments}
-            className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30 hover:bg-white/30 transition-colors"
-        >
-            <ChevronDown className="w-6 h-6 text-white" />
-        </button>
-        </div>
-        {/* Right Sidebar */}
-        <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center z-10" style={{ pointerEvents: 'auto' }}>
-          <div className="flex flex-col items-center gap-1">
-            <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
-              <Heart className="w-7 h-7 text-white" />
-            </div>
-            <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.like_count)}</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <button
-              onClick={() => setShowComments(!showComments)}
-              className="p-3 bg-white/20 backdrop-blur-sm rounded-full"
-            >
-              <MessageCircle className="w-7 h-7 text-white" />
-            </button>
-            <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.comment_count)}</span>
-          </div>
-          <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
-            <Share2 className="w-7 h-7 text-white" />
-          </div>
-          <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
-            <Bookmark className="w-7 h-7 text-white" />
-          </div>
-        </div>
+                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50" style={{ pointerEvents: 'auto' }}>
+                  <button
+                    onClick={() => scrollToVideo(currentVideoIndex - 1)}
+                    disabled={currentVideoIndex === 0 || showComments}
+                    className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30 hover:bg-white/30 transition-colors"
+                  >
+                    <ChevronUp className="w-6 h-6 text-white" />
+                  </button>
+                  <button
+                    onClick={() => scrollToVideo(currentVideoIndex + 1)}
+                    disabled={currentVideoIndex === VIDEOS.length - 1 || showComments}
+                    className="p-3 bg-white/20 backdrop-blur-sm rounded-full disabled:opacity-30 hover:bg-white/30 transition-colors"
+                  >
+                    <ChevronDown className="w-6 h-6 text-white" />
+                  </button>
+                </div>
 
-        {/* Bottom Info Bar */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-10" style={{ pointerEvents: 'auto' }}>
-          <div className="text-white">
-            <div className="font-bold">@{currentVideo.channel}</div>
-            <div className="text-sm mt-1">{currentVideo.title}</div>
-            {currentVideo.unique_slang_terms && currentVideo.unique_slang_terms.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {currentVideo.unique_slang_terms.map((slang, idx) => (
-                  <span key={idx} className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                    #{slang}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Comments Section Overlay */}
-        {showComments && (
-          <div 
-            className="absolute inset-0 bg-black/50 z-30"
-            onClick={() => setShowComments(false)}
-            style={{ pointerEvents: 'auto' }}
-          >
-            <div 
-              className="absolute bottom-0 left-0 right-0 h-2/3 bg-gray-900 rounded-t-3xl flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-4 border-b border-gray-700">
-                <div 
-                  className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
-                  onClick={() => setShowComments(false)}
-                ></div>
-                <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.slang_comment_count || 0)} Comments with Slang</h3>
-              </div>
-
-              {/* Feedback - Sticky at top */}
-              {showFeedback && feedback && (
-                <div className="sticky top-0 z-10 p-4 bg-blue-600 border-b border-gray-700">
-                  <div className="flex items-start gap-3">
-                    <div className="text-3xl">
-                      {feedback.score >= 80 ? '🔥' : feedback.score >= 50 ? '👍' : '📚'}
+                <div className="absolute right-4 bottom-24 flex flex-col gap-6 items-center z-10" style={{ pointerEvents: 'auto' }}>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
+                      <Heart className="w-7 h-7 text-white" />
                     </div>
-                    <div className="flex-1">
-                      <div className="text-white font-bold mb-1">{feedback.message}</div>
-                      <div className="text-white/90 text-sm mb-2">
-                        Overall Score: {Math.round(feedback.score)}%
-                      </div>
-                      {feedback.grammarScore !== undefined && (
-                        <div className="text-white/80 text-xs mb-2 flex gap-3">
-                          <span>Grammar: {feedback.grammarScore}%</span>
-                          <span>Context: {feedback.contextScore}%</span>
-                          <span>Natural: {feedback.naturalnessScore}%</span>
-                        </div>
-                      )}
-                      {feedback.correction && feedback.correction !== comment && (
-                        <div className="text-green-300 text-xs mb-1">
-                          ✓ Corrected: {feedback.correction}
-                        </div>
-                      )}
-                      {feedback.goodParts && feedback.goodParts.length > 0 && (
-                        <div className="text-green-300 text-xs mb-1">
-                          ✓ Good: {feedback.goodParts.join(', ')}
-                        </div>
-                      )}
-                      {feedback.mistakes && feedback.mistakes.length > 0 && (
-                        <div className="text-red-300 text-xs mb-1">
-                          ✗ Tips: {feedback.mistakes.join(', ')}
-                        </div>
-                      )}
-                    </div>
+                    <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.like_count)}</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      onClick={() => setShowComments(!showComments)}
+                      className="p-3 bg-white/20 backdrop-blur-sm rounded-full"
+                    >
+                      <MessageCircle className="w-7 h-7 text-white" />
+                    </button>
+                    <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.comment_count)}</span>
+                  </div>
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
+                    <Share2 className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
+                    <Bookmark className="w-7 h-7 text-white" />
                   </div>
                 </div>
-              )}
 
-              {/* Comments List */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                
-                {/* Real YouTube Comments - Show First (3-4 comments) */}
-                {currentVideo.top_comments && currentVideo.top_comments.slice(0, 4).map((c, idx) => {
-                  const commentId = c.comment_id;
-                  const isExplaining = activeExplanation === commentId;
-                  const isLoading = loadingExplanation === commentId;
-                  const explanation = explanations[commentId];
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-10" style={{ pointerEvents: 'auto' }}>
+                  <div className="text-white">
+                    <div className="font-bold">@{currentVideo.channel}</div>
+                    <div className="text-sm mt-1">{currentVideo.title}</div>
+                    {currentVideo.unique_slang_terms && currentVideo.unique_slang_terms.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {currentVideo.unique_slang_terms.map((slang, idx) => (
+                          <span key={idx} className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                            #{slang}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                  return (
-                    <div key={commentId} className="relative">
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="text-white font-semibold text-sm">{c.author}</div>
-                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">
-                              Real Comment
-                            </span>
-                            <button
-                              onClick={() => handleExplainClick(commentId, c.text, c.detected_slang)}
-                              disabled={isLoading}
-                              className="p-1 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-colors disabled:opacity-50"
-                              title="Explain this comment"
-                            >
-                              {isLoading ? (
-                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <Lightbulb className="w-3 h-3 text-yellow-300" />
-                              )}
-                            </button>
-                          </div>
-                          <div className="text-white/90 text-sm mt-1">{c.text}</div>
+                {showComments && (
+                  <div 
+                    className="absolute inset-0 bg-black/50 z-30"
+                    onClick={() => setShowComments(false)}
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    <div 
+                      className="absolute bottom-0 left-0 right-0 h-2/3 bg-gray-900 rounded-t-3xl flex flex-col"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="p-4 border-b border-gray-700">
+                        <div 
+                          className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
+                          onClick={() => setShowComments(false)}
+                        ></div>
+                        <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.slang_comment_count || 0)} Comments with Slang</h3>
+                      </div>
 
-                          {/* Tooltip/Bubble for Explanation */}
-                          {isExplaining && explanation && (
-                            <div className="mt-3 p-3 bg-gray-800 rounded-lg shadow-lg border border-gray-700 relative">
-                              <button
-                                onClick={() => setActiveExplanation(null)}
-                                className="absolute top-2 right-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
-                              >
-                                <X className="w-3 h-3 text-gray-400" />
-                              </button>
-
-                              <div className="text-white/90 text-xs mb-2">
-                                <span className="font-semibold text-blue-400">Translation:</span> {explanation.translation}
+                      {showFeedback && feedback && (
+                        <div className="sticky top-0 z-10 p-4 bg-blue-600 border-b border-gray-700">
+                          <div className="flex items-start gap-3">
+                            <div className="text-3xl">
+                              {feedback.score >= 80 ? '🔥' : feedback.score >= 50 ? '👍' : '📚'}
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-white font-bold mb-1">{feedback.message}</div>
+                              <div className="text-white/90 text-sm mb-2">
+                                Overall Score: {Math.round(feedback.score)}%
                               </div>
-
-                              {explanation.slangBreakdown && explanation.slangBreakdown.length > 0 && (
-                                <div className="text-white/80 text-xs">
-                                  <div className="font-semibold text-purple-400 mb-1">Slang Breakdown:</div>
-                                  {explanation.slangBreakdown.map((item, i) => (
-                                    <div key={i} className="ml-2 mb-1">
-                                      <span className="text-yellow-300 font-semibold">{item.term}:</span> {item.definition}
-                                      <div className="text-gray-400 italic ml-2">"{item.usage}"</div>
-                                    </div>
-                                  ))}
+                              {feedback.grammarScore !== undefined && (
+                                <div className="text-white/80 text-xs mb-2 flex gap-3">
+                                  <span>Grammar: {feedback.grammarScore}%</span>
+                                  <span>Context: {feedback.contextScore}%</span>
+                                  <span>Natural: {feedback.naturalnessScore}%</span>
+                                </div>
+                              )}
+                              {feedback.correction && feedback.correction !== comment && (
+                                <div className="text-green-300 text-xs mb-1">
+                                  ✓ Corrected: {feedback.correction}
+                                </div>
+                              )}
+                              {feedback.goodParts && feedback.goodParts.length > 0 && (
+                                <div className="text-green-300 text-xs mb-1">
+                                  ✓ Good: {feedback.goodParts.join(', ')}
+                                </div>
+                              )}
+                              {feedback.mistakes && feedback.mistakes.length > 0 && (
+                                <div className="text-red-300 text-xs mb-1">
+                                  ✗ Tips: {feedback.mistakes.join(', ')}
                                 </div>
                               )}
                             </div>
-                          )}
-
-                          <div className="flex gap-4 mt-2">
-                            <button className="text-gray-400 text-xs flex items-center gap-1">
-                              <Heart className="w-3 h-3" /> {c.like_count}
-                            </button>
                           </div>
                         </div>
+                      )}
+
+                      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {currentVideo.top_comments && currentVideo.top_comments.slice(0, 10).map((c, idx) => {
+                          const commentId = c.comment_id;
+                          const tokens = tokenizeText(c.text);
+
+                          return (
+                            <div key={commentId} className="relative">
+                              <div className="flex gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-white font-semibold text-sm">{c.author}</div>
+                                  </div>
+                                  <div className="text-white/90 text-sm mt-1 leading-relaxed">
+                                    {tokens.map((token, i) => {
+                                      if (!token.isWord) {
+                                        return <span key={i}>{token.text}</span>;
+                                      }
+
+                                      let className = "cursor-pointer transition-colors border-b border-dotted ";
+                                      if (token.isLearned) {
+                                        className += "text-green-400 border-green-400";
+                                      } else if (token.isKnown) {
+                                        className += "text-gray-400 border-gray-600";
+                                      } else {
+                                        className += "text-white border-white/30 hover:border-white hover:text-blue-300";
+                                      }
+
+                                      return (
+                                        <span
+                                          key={i}
+                                          className={className}
+                                          onMouseEnter={(e) => handleWordHover(token.cleanWord, e)}
+                                          onMouseLeave={handleWordLeave}
+                                        >
+                                          {token.text}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="flex gap-4 mt-2">
+                                    <button className="text-gray-400 text-xs flex items-center gap-1">
+                                      <Heart className="w-3 h-3" /> {c.like_count}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {hoveredWord && (
+                          <div
+                            className="fixed z-[100]"
+                            style={{
+                              left: `${wordPosition.x}px`,
+                              top: `${wordPosition.y}px`,
+                              transform: 'translate(-50%, -100%)',
+                              pointerEvents: 'auto'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.stopPropagation();
+                              // Clear any pending timeout when entering tooltip
+                              if (hoverTimeoutId) {
+                                clearTimeout(hoverTimeoutId);
+                                setHoverTimeoutId(null);
+                              }
+                              setTooltipLocked(true);
+                            }}
+                            onMouseLeave={(e) => {
+                              e.stopPropagation();
+                              setTooltipLocked(false);
+                              // Immediately close when leaving tooltip
+                              setHoveredWord(null);
+                            }}
+                          >
+                            <div 
+                              className="bg-gray-900 border-2 border-blue-400 rounded-lg shadow-2xl p-4 mb-2"
+                              style={{ minWidth: '250px', maxWidth: '350px' }}
+                            >
+                              {loadingDefinition ? (
+                                <div className="text-white text-center py-4">
+                                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                                  Loading...
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-blue-300 font-bold text-base mb-2">{hoveredWord.word}</div>
+                                  <div className="text-white/90 text-sm mb-3">{hoveredWord.definition}</div>
+                                  {hoveredWord.example && (
+                                    <div className="text-gray-400 italic text-xs mb-3">"{hoveredWord.example}"</div>
+                                  )}
+                                  
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleWantToLearn(hoveredWord.word, hoveredWord.definition, hoveredWord.example);
+                                      }}
+                                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      Want to Learn
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAlreadyKnow(hoveredWord.word);
+                                      }}
+                                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                      Already Know
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {userComments.length > 0 && currentVideo.comments_with_slang && currentVideo.comments_with_slang.length > 0 && (
+                          <div className="flex items-center gap-3 my-4">
+                            <div className="flex-1 h-px bg-gray-700"></div>
+                            <span className="text-gray-500 text-xs">Your Comments</span>
+                            <div className="flex-1 h-px bg-gray-700"></div>
+                          </div>
+                        )}
+
+                        {userComments.map(c => (
+                          <div key={c.id} className="space-y-2">
+                            <div className="flex gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0"></div>
+                              <div className="flex-1">
+                                <div className="text-white font-semibold text-sm">{c.user}</div>
+                                <div className="text-white/90 text-sm mt-1">{c.text}</div>
+                                <div className="flex gap-4 mt-2">
+                                  <button className="text-gray-400 text-xs flex items-center gap-1">
+                                    <Heart className="w-3 h-3" /> {c.likes}
+                                  </button>
+                                  <button className="text-gray-400 text-xs">{c.aiResponses.length} Replies</button>
+                                </div>
+                              </div>
+                            </div>
+                            {c.aiResponses.map((response, idx) => (
+                              <div key={idx} className="flex gap-3 ml-11">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-xs">
+                                  AI
+                                </div>
+                                <div className="flex-1">
+                                  <div className="text-white font-semibold text-sm">
+                                    {response.authorName || 'AI Coach'}
+                                  </div>
+                                  <div className="text-white/90 text-sm mt-1">
+                                    {response.aiComment || 'No response available'}
+                                  </div>
+                                  <div className="flex gap-4 mt-2">
+                                    <button className="text-gray-400 text-xs flex items-center gap-1">
+                                      <Heart className="w-3 h-3" /> {response.likes || Math.floor(Math.random() * 50)}
+                                    </button>
+                                    <button className="text-gray-400 text-xs">Reply</button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  );
-                })}
 
-                {/* Divider between real and user comments */}
-                {userComments.length > 0 && currentVideo.comments_with_slang && currentVideo.comments_with_slang.length > 0 && (
-                  <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 h-px bg-gray-700"></div>
-                    <span className="text-gray-500 text-xs">Your Comments</span>
-                    <div className="flex-1 h-px bg-gray-700"></div>
-                  </div>
-                )}
-
-                {/* User Comments */}
-                {userComments.map(c => (
-                  <div key={c.id} className="space-y-2">
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0"></div>
-                      <div className="flex-1">
-                        <div className="text-white font-semibold text-sm">{c.user}</div>
-                        <div className="text-white/90 text-sm mt-1">{c.text}</div>
-                        <div className="flex gap-4 mt-2">
-                          <button className="text-gray-400 text-xs flex items-center gap-1">
-                            <Heart className="w-3 h-3" /> {c.likes}
+                      <div className="p-4 border-t border-gray-700 bg-gray-800">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={comment}
+                            onChange={(e) => setComment(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && !isEvaluating && handleSubmitComment()}
+                            placeholder={isEvaluating ? "Evaluating..." : "Add a comment..."}
+                            disabled={isEvaluating}
+                            className="flex-1 bg-gray-700 text-white rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                          />
+                          <button
+                            onClick={handleSubmitComment}
+                            disabled={!comment.trim() || isEvaluating}
+                            className="p-2 bg-purple-600 rounded-full disabled:opacity-50 disabled:cursor-not-allowed relative"
+                          >
+                            {isEvaluating ? (
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Send className="w-5 h-5 text-white" />
+                            )}
                           </button>
-                          <button className="text-gray-400 text-xs">{c.aiResponses.length} Replies</button>
                         </div>
+                        {isEvaluating && (
+                          <div className="text-white/60 text-xs mt-2 text-center">
+                            AI is evaluating your comment...
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {/* AI Responses */}
-                    {c.aiResponses.map((response, idx) => (
-                      <div key={idx} className="flex gap-3 ml-11">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-xs">
-                          AI
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-white font-semibold text-sm">
-                            {response.authorName || 'AI Coach'}
-                          </div>
-                          <div className="text-white/90 text-sm mt-1">
-                            {response.aiComment || 'No response available'}
-                          </div>
-                          <div className="flex gap-4 mt-2">
-                            <button className="text-gray-400 text-xs flex items-center gap-1">
-                              <Heart className="w-3 h-3" /> {response.likes || Math.floor(Math.random() * 50)}
-                            </button>
-                            <button className="text-gray-400 text-xs">Reply</button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-
-              {/* Comment Input */}
-              <div className="p-4 border-t border-gray-700 bg-gray-800">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !isEvaluating && handleSubmitComment()}
-                    placeholder={isEvaluating ? "Evaluating..." : "Add a comment..."}
-                    disabled={isEvaluating}
-                    className="flex-1 bg-gray-700 text-white rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                  />
-                  <button
-                    onClick={handleSubmitComment}
-                    disabled={!comment.trim() || isEvaluating}
-                    className="p-2 bg-purple-600 rounded-full disabled:opacity-50 disabled:cursor-not-allowed relative"
-                  >
-                    {isEvaluating ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Send className="w-5 h-5 text-white" />
-                    )}
-                  </button>
-                </div>
-                {isEvaluating && (
-                  <div className="text-white/60 text-xs mt-2 text-center">
-                    AI is evaluating your comment...
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
               </div>
             </div>
           </>
         ) : (
-          // My Slang View
           <MySlang
             mySlang={mySlang}
             suggestions={suggestions}

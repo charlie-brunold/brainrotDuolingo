@@ -315,6 +315,45 @@ def evaluate_comment(request: EvaluateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
 
+@app.post("/api/define-word")
+def define_word(request: dict):
+    """Get definition for any word using AI"""
+    word = request.get('word', '')
+    context = request.get('context', '')
+    
+    try:
+        prompt = f"""Define the word "{word}" in the context of the comment for someone learning English. 
+        
+Context: {context}
+
+Provide:
+1. A simple, clear definition (1-2 sentences)
+2. An example sentence using the word naturally
+
+Format as JSON:
+{{
+  "word": "{word}",
+  "definition": "...",
+  "example": "..."
+}}"""
+
+        response = groq_evaluator.client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=groq_evaluator.model,
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        return result
+    except Exception as e:
+        return {
+            "word": word,
+            "definition": "Definition not available",
+            "example": ""
+        }
+
+
 @app.post("/api/respond", response_model=RespondResponse)
 def generate_ai_response(request: RespondRequest):
     """Generate multiple Gen Z style AI responses to user's comment."""
