@@ -864,8 +864,8 @@ const handleAlreadyKnow = (term) => {
                                         return <span key={i}>{token.text}</span>;
                                       }
 
-                                      // Only make words hoverable if explanation has been loaded
-                                      if (!hasExplanation) {
+                                      // Only make words hoverable if explanation is actively open
+                                      if (!isExplanationActive) {
                                         return <span key={i}>{token.text}</span>;
                                       }
 
