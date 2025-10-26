@@ -652,7 +652,7 @@ const handleAlreadyKnow = (term) => {
               : 'text-white/70 hover:text-white'
           }`}
         >
-          My Words {mySlang.length > 0 && `(${mySlang.length})`}
+          My Stats
         </button>
         <button
           onClick={() => setShowMySlang(false)}
@@ -801,7 +801,11 @@ const handleAlreadyKnow = (term) => {
                           className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
                           onClick={() => setShowComments(false)}
                         ></div>
+<<<<<<< Updated upstream
                         
+=======
+                        <h3 className="text-white font-bold text-lg">Top Comments</h3>
+>>>>>>> Stashed changes
                       </div>
 
                       {showFeedback && feedback && (
@@ -1108,6 +1112,9 @@ const handleAlreadyKnow = (term) => {
         ) : (
           <MySlang
             mySlang={mySlang}
+            setMySlang={setMySlang}
+            knownWords={knownWords}
+            setKnownWords={setKnownWords}
             suggestions={suggestions}
             loadingSuggestions={loadingSuggestions}
           />
