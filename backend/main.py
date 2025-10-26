@@ -1,6 +1,7 @@
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from youtube_fetcher import YouTubeShortsSlangFetcher
 from groq_evaluator import GroqCommentEvaluator
@@ -14,6 +15,8 @@ from collections import defaultdict, Counter
 import json
 import random  # <-- NEW: Import for shuffling lists
 import time # <-- NEW: Import for time.sleep in retry logic
+import base64  # <-- NEW: For encoding audio to base64
+from youtube_transcript_api import YouTubeTranscriptApi  # <-- NEW: For fetching transcripts
 
 # ============================================================================
 # 3. REQUEST/RESPONSE MODELS
@@ -80,6 +83,23 @@ class ExplainCommentRequest(BaseModel):
 class ExplainCommentResponse(BaseModel):
     translation: str
     slangBreakdown: List[SlangBreakdownItem]
+
+class TranslateVideoRequest(BaseModel):
+    video_id: str
+    target_language: str = "Spanish"  # Default to Spanish
+
+class TranscriptSegment(BaseModel):
+    text: str
+    start: float
+    duration: float
+
+class TranslateVideoResponse(BaseModel):
+    video_id: str
+    target_language: str
+    original_transcript: List[TranscriptSegment]
+    translated_text: str
+    audio_base64: str
+    audio_format: str
 
 
 # ============================================================================
@@ -496,7 +516,7 @@ def explain_comment(request: ExplainCommentRequest):
     """Explain a YouTube comment by translating it to simpler language and breaking down each slang term."""
     if not groq_evaluator:
         raise HTTPException(status_code=503, detail="AI response service not available. Please check Groq API key.")
-    
+
     try:
         explanation = groq_evaluator.explain_comment(
             comment_text=request.commentText,
@@ -507,6 +527,130 @@ def explain_comment(request: ExplainCommentRequest):
         return explanation
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
+
+@app.post("/api/translate-video", response_model=TranslateVideoResponse)
+def translate_video(request: TranslateVideoRequest):
+    """
+    Translate a YouTube video's transcript to the target language and generate TTS audio.
+
+    Flow:
+    1. Fetch transcript using YouTube Transcript API
+    2. Translate full transcript to target language using Groq LLM
+    3. Generate TTS audio using Groq's PlayAI model
+    4. Return transcript, translation, and audio
+    """
+    try:
+        # Step 1: Fetch transcript from YouTube
+        print(f"Fetching transcript for video: {request.video_id}")
+        transcript_data = None
+
+        # Create instance of the API (required for v1.2.3+)
+        ytt_api = YouTubeTranscriptApi()
+
+        # Try multiple methods to fetch transcripts (especially for YouTube Shorts)
+        try:
+            # Method 1: Try fetch() with default English settings (includes auto-generated)
+            transcript_result = ytt_api.fetch(request.video_id, languages=['en', 'en-US', 'en-GB'])
+            transcript_data = transcript_result.to_raw_data()
+            print(f"✓ Transcript fetched: {len(transcript_data)} segments (is_generated: {transcript_result.is_generated})")
+        except Exception as e1:
+            print(f"Default transcript fetch failed: {str(e1)[:150]}")
+
+            # Method 2: List all available transcripts and try manual + auto-generated explicitly
+            try:
+                transcript_list = ytt_api.list(request.video_id)
+                print(f"Available transcripts: {[t.language_code for t in transcript_list]}")
+
+                # Try manually created transcripts first
+                try:
+                    transcript = transcript_list.find_manually_created_transcript(['en', 'en-US', 'en-GB'])
+                    transcript_result = transcript.fetch()
+                    transcript_data = transcript_result.to_raw_data()
+                    print(f"✓ Manual transcript found: {transcript.language_code}")
+                except Exception as e2:
+                    print(f"No manual transcript found: {str(e2)[:150]}")
+
+                    # Try auto-generated transcripts (common for YouTube Shorts)
+                    try:
+                        transcript = transcript_list.find_generated_transcript(['en', 'en-US', 'en-GB', 'a.en'])
+                        transcript_result = transcript.fetch()
+                        transcript_data = transcript_result.to_raw_data()
+                        print(f"✓ Auto-generated transcript found: {transcript.language_code}")
+                    except Exception as e3:
+                        print(f"No auto-generated transcript found: {str(e3)[:150]}")
+            except Exception as e4:
+                print(f"Failed to list transcripts: {str(e4)[:150]}")
+
+        # If all methods failed, raise an error
+        if not transcript_data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No transcript available for video {request.video_id}. The video may not have captions or they may be disabled."
+            )
+
+        # Convert transcript to our model format
+        transcript_segments = [
+            TranscriptSegment(
+                text=segment['text'],
+                start=segment['start'],
+                duration=segment['duration']
+            )
+            for segment in transcript_data
+        ]
+
+        # Step 2: Combine transcript into full text
+        full_transcript = " ".join([seg.text for seg in transcript_segments])
+        print(f"Transcript fetched: {len(full_transcript)} characters")
+
+        # Step 3: Translate using Groq LLM
+        print(f"Translating to {request.target_language}...")
+        translation_prompt = f"""Translate the following English text to {request.target_language}.
+Keep the translation natural and conversational, as this is from a YouTube video.
+
+Text to translate:
+{full_transcript}
+
+Provide ONLY the translation, no explanations or additional text."""
+
+        translation_response = groq_evaluator.client.chat.completions.create(
+            messages=[{
+                "role": "user",
+                "content": translation_prompt
+            }],
+            model=groq_evaluator.model,
+            temperature=0.5,  # Lower temp for more accurate translation
+            max_tokens=2000
+        )
+
+        translated_text = translation_response.choices[0].message.content.strip()
+        print(f"Translation complete: {len(translated_text)} characters")
+
+        # Step 4: Generate TTS audio
+        print("Generating TTS audio...")
+        audio_bytes = groq_evaluator.text_to_speech(
+            text=translated_text,
+            voice="Atlas-PlayAI",  # Default voice
+            audio_format="mp3"
+        )
+
+        # Convert audio to base64 for transmission
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        print(f"TTS generation complete: {len(audio_bytes)} bytes")
+
+        return TranslateVideoResponse(
+            video_id=request.video_id,
+            target_language=request.target_language,
+            original_transcript=transcript_segments,
+            translated_text=translated_text,
+            audio_base64=audio_base64,
+            audio_format="mp3"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in translate_video: {e}")
+        raise HTTPException(status_code=500, detail=f"Translation error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

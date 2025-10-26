@@ -1032,3 +1032,43 @@ CRITICAL JSON RULES:
 4. Keep reason to 1 sentence (e.g., "Often used with rizz in dating contexts")
 5. All strings must be wrapped in double quotes
 6. DO NOT suggest terms they've already learned"""
+
+    def text_to_speech(
+        self,
+        text: str,
+        voice: str = "Atlas-PlayAI",
+        audio_format: str = "mp3"
+    ) -> bytes:
+        """
+        Convert text to speech using Groq's PlayAI TTS model.
+
+        Args:
+            text: The text to convert to speech
+            voice: Voice to use (default: Atlas-PlayAI). Available English voices:
+                   Arista-PlayAI, Atlas-PlayAI, Basil-PlayAI, Briggs-PlayAI,
+                   Calum-PlayAI, Celeste-PlayAI, Cheyenne-PlayAI, Chip-PlayAI,
+                   Cillian-PlayAI, Deedee-PlayAI, Fritz-PlayAI, Gail-PlayAI,
+                   Indigo-PlayAI, Mamaw-PlayAI, Mason-PlayAI, Mikail-PlayAI,
+                   Mitch-PlayAI, Quinn-PlayAI, Thunder-PlayAI
+            audio_format: Output audio format (mp3, wav, flac, ogg, mulaw)
+
+        Returns:
+            Audio data as bytes
+
+        Raises:
+            Exception if TTS generation fails
+        """
+        try:
+            response = self.client.audio.speech.create(
+                model="playai-tts",
+                voice=voice,
+                input=text,
+                response_format=audio_format
+            )
+
+            # BinaryAPIResponse requires .read() method to get bytes
+            return response.read()
+
+        except Exception as e:
+            print(f"Error in text_to_speech: {e}")
+            raise Exception(f"TTS generation failed: {str(e)}")

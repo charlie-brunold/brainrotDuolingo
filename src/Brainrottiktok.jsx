@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Languages } from 'lucide-react';
 import MySlang from './Myslang.jsx';
 
 
@@ -54,7 +54,13 @@ export default function BrainrotTikTok({ shortsData }) {
   const [showMySlang, setShowMySlang] = useState(false); // Toggle for My Slang overlay
   const [suggestions, setSuggestions] = useState([]); // AI-suggested slang terms
   const [loadingSuggestions, setLoadingSuggestions] = useState(false); // Loading state for suggestions
+  const [isTranslating, setIsTranslating] = useState(false); // Loading state for translation
+  const [translatedText, setTranslatedText] = useState(''); // Translated text
+  const [translationAudio, setTranslationAudio] = useState(null); // Audio element for translation
+  const [showTranslation, setShowTranslation] = useState(false); // Show translated text overlay
+  const [targetLanguage, setTargetLanguage] = useState('Spanish'); // Target language for translation
   const containerRef = useRef(null);
+  const audioRef = useRef(null); // Ref for audio element
   
   // Use provided shortsData or fallback
   const VIDEOS = shortsData || [];
@@ -426,6 +432,66 @@ export default function BrainrotTikTok({ shortsData }) {
     }
   };
 
+  const handleTranslateVideo = async () => {
+    if (!videoId || isTranslating) return;
+
+    setIsTranslating(true);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/translate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_id: videoId,
+          target_language: targetLanguage
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Translation failed');
+      }
+
+      const data = await response.json();
+
+      // Set translated text
+      setTranslatedText(data.translated_text);
+      setShowTranslation(true);
+
+      // Create audio from base64
+      const audioBlob = await fetch(`data:audio/mp3;base64,${data.audio_base64}`).then(r => r.blob());
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Create and play audio
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.play();
+
+      // Clean up when audio ends
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+      };
+
+    } catch (error) {
+      console.error('Error translating video:', error);
+      alert(error.message || 'Translation failed. The video may not have captions available.');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleStopTranslation = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setShowTranslation(false);
+    setTranslatedText('');
+  };
+
   // --- Render Logic ---
 
   if (!currentVideo) {
@@ -579,6 +645,25 @@ export default function BrainrotTikTok({ shortsData }) {
             </button>
             <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.comment_count)}</span>
           </div>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              onClick={showTranslation ? handleStopTranslation : handleTranslateVideo}
+              disabled={isTranslating}
+              className={`p-3 backdrop-blur-sm rounded-full transition-colors ${
+                showTranslation
+                  ? 'bg-green-500/80'
+                  : 'bg-white/20 hover:bg-white/30'
+              } ${isTranslating ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={showTranslation ? 'Stop Translation' : 'Translate to Spanish'}
+            >
+              {isTranslating ? (
+                <div className="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Languages className="w-7 h-7 text-white" />
+              )}
+            </button>
+            <span className="text-white text-xs font-semibold">Translate</span>
+          </div>
           <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
             <Share2 className="w-7 h-7 text-white" />
           </div>
@@ -603,6 +688,26 @@ export default function BrainrotTikTok({ shortsData }) {
             )}
           </div>
         </div>
+
+        {/* Translation Overlay */}
+        {showTranslation && translatedText && (
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-30 max-h-48 overflow-y-auto"
+               style={{ pointerEvents: 'auto' }}>
+            <div className="flex items-start gap-2 mb-2">
+              <Languages className="w-5 h-5 text-green-400 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <div className="text-green-400 font-semibold text-sm mb-1">Translation ({targetLanguage})</div>
+                <div className="text-white text-sm">{translatedText}</div>
+              </div>
+              <button
+                onClick={handleStopTranslation}
+                className="p-1 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Comments Section Overlay */}
         {showComments && (
