@@ -63,11 +63,33 @@ export default function BrainrotTikTok({ shortsData }) {
   const [translationError, setTranslationError] = useState(null); // Error message for translation
   const containerRef = useRef(null);
   const audioRef = useRef(null); // Ref for audio element
+  const playerRef = useRef(null); // YouTube IFrame API player instance
+  const [playerReady, setPlayerReady] = useState(false); // Track if player is ready
+  const [currentAudioUrl, setCurrentAudioUrl] = useState(null); // Track blob URL for cleanup
   
   // Use provided shortsData or fallback
   const VIDEOS = shortsData || [];
   const currentVideo = VIDEOS[currentVideoIndex];
   const videoId = currentVideo?.url ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    // Check if API is already loaded
+    if (window.YT && window.YT.Player) {
+      return;
+    }
+
+    // Load the IFrame Player API code asynchronously
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    // The API will call this function when ready
+    window.onYouTubeIframeAPIReady = () => {
+      console.log('YouTube IFrame API loaded');
+    };
+  }, []);
 
 
   // --- Helper Functions ---
@@ -76,6 +98,28 @@ export default function BrainrotTikTok({ shortsData }) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return num?.toString() || '0';
+  };
+
+  // Clean up audio and blob URL to prevent memory leaks
+  const cleanupAudio = () => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      } catch (e) {
+        console.log('Error cleaning up audio:', e);
+      }
+    }
+
+    if (currentAudioUrl) {
+      try {
+        URL.revokeObjectURL(currentAudioUrl);
+        setCurrentAudioUrl(null);
+      } catch (e) {
+        console.log('Error revoking blob URL:', e);
+      }
+    }
   };
 
   const scrollToVideo = (index) => {
@@ -88,9 +132,17 @@ export default function BrainrotTikTok({ shortsData }) {
       setShowFeedback(false);
       setTranslationError(null);
       setShowTranslation(false);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+
+      // Clean up audio and blob URL
+      cleanupAudio();
+
+      // Unmute video if it was muted
+      if (playerRef.current && playerRef.current.unMute) {
+        try {
+          playerRef.current.unMute();
+        } catch (e) {
+          console.log('Could not unmute player:', e);
+        }
       }
     }
   };
@@ -379,6 +431,51 @@ export default function BrainrotTikTok({ shortsData }) {
     }
   }, [showMySlang]);
 
+  // Initialize YouTube player when video changes
+  useEffect(() => {
+    if (!videoId || !window.YT || !window.YT.Player) {
+      return;
+    }
+
+    // Destroy existing player if it exists
+    if (playerRef.current && playerRef.current.destroy) {
+      try {
+        playerRef.current.destroy();
+      } catch (e) {
+        console.log('Error destroying player:', e);
+      }
+    }
+
+    // Create new player for current video
+    const playerId = `youtube-player-${currentVideoIndex}`;
+    const playerElement = document.getElementById(playerId);
+
+    if (playerElement) {
+      try {
+        playerRef.current = new window.YT.Player(playerId, {
+          videoId: videoId,
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+          },
+          events: {
+            onReady: (event) => {
+              console.log('YouTube player ready');
+              setPlayerReady(true);
+            },
+            onError: (event) => {
+              console.log('YouTube player error:', event.data);
+            }
+          }
+        });
+      } catch (e) {
+        console.log('Error creating player:', e);
+      }
+    }
+  }, [currentVideoIndex, videoId]);
+
   const handleSubmitComment = async () => {
     if (!comment.trim() || isEvaluating) return;
 
@@ -443,6 +540,9 @@ export default function BrainrotTikTok({ shortsData }) {
   const handleTranslateVideo = async () => {
     if (!videoId || isTranslating) return;
 
+    // Clean up any existing audio first to prevent memory leaks
+    cleanupAudio();
+
     setIsTranslating(true);
     setTranslationError(null); // Clear any previous errors
 
@@ -469,36 +569,134 @@ export default function BrainrotTikTok({ shortsData }) {
       setTranslatedText(data.translated_text);
       setShowTranslation(true);
 
+      // Get video duration
+      let videoDuration = 0;
+      if (playerRef.current && playerRef.current.getDuration) {
+        try {
+          videoDuration = playerRef.current.getDuration();
+          console.log('Video duration:', videoDuration, 'seconds');
+        } catch (e) {
+          console.log('Could not get video duration:', e);
+        }
+      }
+
+      // Restart video and mute it BEFORE playing TTS
+      if (playerRef.current && playerRef.current.seekTo && playerRef.current.mute) {
+        try {
+          playerRef.current.seekTo(0, true); // Restart from beginning
+          playerRef.current.mute(); // Mute video audio
+          console.log('Video restarted and muted');
+        } catch (e) {
+          console.log('Could not control player:', e);
+        }
+      }
+
       // Create audio from base64
       const audioBlob = await fetch(`data:audio/mp3;base64,${data.audio_base64}`).then(r => r.blob());
       const audioUrl = URL.createObjectURL(audioBlob);
+      setCurrentAudioUrl(audioUrl); // Track for cleanup
 
-      // Create and play audio
+      // Create audio element
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
 
-      audio.play();
+      // Metadata loading with timeout fallback
+      let metadataTimeout;
+      let metadataHandled = false;
+
+      const handleMetadataLoaded = () => {
+        if (metadataHandled) return;
+        metadataHandled = true;
+        clearTimeout(metadataTimeout);
+
+        const audioDuration = audio.duration;
+        console.log('TTS duration:', audioDuration, 'seconds');
+
+        // Calculate playback rate to match video duration
+        if (videoDuration > 0 && audioDuration > 0) {
+          // Only speed up if TTS is longer than video (never slow down)
+          if (audioDuration > videoDuration) {
+            let playbackRate = audioDuration / videoDuration;
+
+            // Cap at 2x speed (too fast becomes unintelligible)
+            playbackRate = Math.min(2.0, playbackRate);
+
+            audio.playbackRate = playbackRate;
+            console.log('TTS longer than video - applied playback rate:', playbackRate.toFixed(2) + 'x');
+          } else {
+            // TTS is shorter or equal - play at normal speed
+            audio.playbackRate = 1.0;
+            console.log('TTS shorter than video - using normal speed (1.0x)');
+          }
+        } else {
+          audio.playbackRate = 1.0;
+          console.log('Using default playback rate (1.0x)');
+        }
+
+        // Play the audio
+        audio.play().catch(err => {
+          console.error('Error playing audio:', err);
+        });
+      };
+
+      audio.addEventListener('loadedmetadata', handleMetadataLoaded);
+
+      // Fallback: play after 2 seconds even if metadata doesn't load
+      metadataTimeout = setTimeout(() => {
+        if (!metadataHandled) {
+          console.warn('Metadata timeout - playing audio with default settings');
+          handleMetadataLoaded();
+        }
+      }, 2000);
 
       // Clean up when audio ends
       audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
+        cleanupAudio();
+        // Unmute video when TTS finishes
+        if (playerRef.current && playerRef.current.unMute) {
+          try {
+            playerRef.current.unMute();
+            console.log('Video unmuted after TTS ended');
+          } catch (e) {
+            console.log('Could not unmute player:', e);
+          }
+        }
       };
 
     } catch (error) {
       console.error('Error translating video:', error);
       setTranslationError(error.message || 'Translation unavailable. The video may not have captions.');
+
+      // Unmute video if error occurred after muting
+      if (playerRef.current && playerRef.current.unMute) {
+        try {
+          playerRef.current.unMute();
+          console.log('Video unmuted after translation error');
+        } catch (e) {
+          console.log('Could not unmute player:', e);
+        }
+      }
     } finally {
       setIsTranslating(false);
     }
   };
 
   const handleStopTranslation = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    // Clean up audio and blob URL
+    cleanupAudio();
+
     setShowTranslation(false);
     setTranslatedText('');
+
+    // Unmute video when user stops translation
+    if (playerRef.current && playerRef.current.unMute) {
+      try {
+        playerRef.current.unMute();
+        console.log('Video unmuted after user stopped translation');
+      } catch (e) {
+        console.log('Could not unmute player:', e);
+      }
+    }
   };
 
   // --- Render Logic ---
@@ -583,17 +781,11 @@ export default function BrainrotTikTok({ shortsData }) {
                   >
                     <div className="w-full h-full flex items-center justify-center bg-black">
                       {videoIdForIndex ? (
-                        <iframe
-                          key={`iframe-${index}`}
-                          width="100%"
-                          height="100%"
-                          src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=${isCurrent ? 1 : 0}&controls=1&rel=0&modestbranding=1`}
-                          title={video.title}
-                          frameBorder="0"
-                          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
+                        <div
+                          key={`player-${index}`}
+                          id={`youtube-player-${index}`}
                           className="absolute inset-0"
-                          style={{ objectFit: 'cover' }}
+                          style={{ width: '100%', height: '100%' }}
                         />
                       ) : (
                         <div className="text-center text-white p-8">
