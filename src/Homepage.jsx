@@ -1,83 +1,94 @@
 import React, { useState } from 'react';
-import { Sparkles, Plus, X, Play, ArrowRight } from 'lucide-react';
+import { Sparkles, Plus, X, ArrowRight } from 'lucide-react';
 
 export default function HomePage({ onStartFetching }) {
-  const [topics, setTopics] = useState([]);
-  const [newTopic, setNewTopic] = useState('');
-  const [customSlang, setCustomSlang] = useState([]);
-  const [newSlang, setNewSlang] = useState('');
-  const [useDefaults, setUseDefaults] = useState(false);
+  // Add TikTok Sans font
+  React.useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.cdnfonts.com/css/tiktok-sans';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    
+    document.body.style.fontFamily = "'TikTok Sans', sans-serif";
+    
+    return () => {
+      document.body.style.fontFamily = '';
+    };
+  }, []);
+  const [selectedTopics, setSelectedTopics] = useState([]);
+  const [customTopic, setCustomTopic] = useState('');
 
-  const defaultTopics = ['gaming', 'food review', 'funny moments'];
+  // Predefined topic bubbles
+  const predefinedTopics = [
+    'Gaming',
+    'Food Review',
+    'Funny Moments',
+    'Minecraft',
+    'Cooking',
+    'Sports',
+    'Music',
+    'Travel',
+    'Fashion',
+    'Tech',
+    'Fitness',
+    'Art',
+    'Pets',
+    'DIY',
+    'Comedy',
+    'Dance'
+  ];
   
   // Fixed values (not configurable by user)
   const shortsPerTopic = 10;
   const commentsPerShort = 50;
 
-  // Add topic
-  const addTopic = () => {
-    if (newTopic.trim() && !topics.includes(newTopic.trim().toLowerCase())) {
-      setTopics([...topics, newTopic.trim().toLowerCase()]);
-      setNewTopic('');
-    }
-  };
-
-  // Remove topic
-  const removeTopic = (topic) => {
-    setTopics(topics.filter(t => t !== topic));
-  };
-
-  // Add custom slang
-  const addSlang = () => {
-    if (newSlang.trim() && !customSlang.includes(newSlang.trim().toLowerCase())) {
-      setCustomSlang([...customSlang, newSlang.trim().toLowerCase()]);
-      setNewSlang('');
-    }
-  };
-
-  // Remove custom slang
-  const removeSlang = (slang) => {
-    setCustomSlang(customSlang.filter(s => s !== slang));
-  };
-
-  // Toggle default topics
-  const toggleDefaults = () => {
-    if (useDefaults) {
-      setTopics(topics.filter(t => !defaultTopics.includes(t)));
+  // Toggle topic selection
+  const toggleTopic = (topic) => {
+    const topicLower = topic.toLowerCase();
+    if (selectedTopics.includes(topicLower)) {
+      setSelectedTopics(selectedTopics.filter(t => t !== topicLower));
     } else {
-      setTopics([...new Set([...topics, ...defaultTopics])]);
+      setSelectedTopics([...selectedTopics, topicLower]);
     }
-    setUseDefaults(!useDefaults);
   };
 
-// Start fetching
-const handleStart = () => {
-  const finalTopics = topics.length > 0 ? topics : defaultTopics;
-  
-  const config = {
-    topics: finalTopics,
-    customSlang: customSlang,  // Keep it simple
-    shortsPerTopic: shortsPerTopic,
-    commentsPerShort: commentsPerShort
+  // Add custom topic
+  const addCustomTopic = () => {
+    const topicLower = customTopic.trim().toLowerCase();
+    if (topicLower && !selectedTopics.includes(topicLower)) {
+      setSelectedTopics([...selectedTopics, topicLower]);
+      setCustomTopic('');
+    }
   };
-  
-  console.log('🚀 Starting with config:', config);
-  console.log('🚀 onStartFetching function:', onStartFetching);
-  
-  if (onStartFetching && typeof onStartFetching === 'function') {
-    onStartFetching(config);
-  } else {
-    console.error('❌ onStartFetching is not a function!', onStartFetching);
-    alert('Error: onStartFetching function not provided!');
-  }
-};
 
-  // Can start if has topics OR will use defaults
-  const canStart = topics.length > 0 || true; // Always allow start (will use defaults if no topics)
+  // Remove selected topic
+  const removeTopic = (topic) => {
+    setSelectedTopics(selectedTopics.filter(t => t !== topic));
+  };
+
+  // Start fetching
+  const handleStart = () => {
+    const config = {
+      topics: selectedTopics,
+      customSlang: [],  // Keep it simple, same as original
+      shortsPerTopic: shortsPerTopic,
+      commentsPerShort: commentsPerShort
+    };
+    
+    console.log('🚀 Starting with config:', config);
+    console.log('🚀 onStartFetching function:', onStartFetching);
+    
+    if (onStartFetching && typeof onStartFetching === 'function') {
+      onStartFetching(config);
+    } else {
+      console.error('❌ onStartFetching is not a function!', onStartFetching);
+      alert('Error: onStartFetching function not provided!');
+    }
+  };
 
   return (
-    <div className="min-h-screen w-full bg-black flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
+    <div className="min-h-screen w-full bg-black flex items-center justify-center p-4" style={{ fontFamily: "'TikTok Sans', sans-serif" }}>
+      <div className="max-w-4xl w-full">
         
         {/* Header */}
         <div className="text-center mb-8">
@@ -86,7 +97,7 @@ const handleStart = () => {
             <h1 className="text-4xl font-bold text-white">Brainrot TikTok</h1>
           </div>
           <p className="text-gray-400">
-            Customize your slang learning experience
+            Select your interests to customize your experience
           </p>
         </div>
 
@@ -95,146 +106,107 @@ const handleStart = () => {
           
           {/* Topics Section */}
           <div>
-            <h2 className="text-white text-xl font-bold mb-3 flex items-center gap-2">
-              🎯 Choose Topics
-              <span className="text-sm font-normal text-gray-400">(Required)</span>
+            <h2 className="text-white text-xl font-bold mb-4">
+              Select Your Interests
             </h2>
             
-            {/* Use Defaults Checkbox */}
-            <label className="flex items-center gap-3 mb-4 cursor-pointer bg-gray-800 p-3 rounded-lg hover:bg-gray-750">
-              <input
-                type="checkbox"
-                checked={useDefaults}
-                onChange={toggleDefaults}
-                className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500"
-              />
-              <div className="flex-1">
-                <div className="text-white font-semibold">Use Default Topics</div>
-                <div className="text-gray-400 text-sm">
-                  {defaultTopics.join(', ')}
-                </div>
-              </div>
-            </label>
+            {/* Predefined Topic Bubbles */}
+            <div className="flex flex-wrap gap-3 mb-6">
+              {predefinedTopics.map(topic => {
+                const isSelected = selectedTopics.includes(topic.toLowerCase());
+                return (
+                  <button
+                    key={topic}
+                    onClick={() => toggleTopic(topic)}
+                    className={`px-4 py-2 rounded-full font-medium transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50'
+                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                    }`}
+                  >
+                    {topic}
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Add Custom Topic */}
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={newTopic}
-                onChange={(e) => setNewTopic(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addTopic()}
-                placeholder="Add custom topic (e.g., minecraft, cooking)"
-                className="flex-1 bg-gray-800 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-500"
-              />
-              <button
-                onClick={addTopic}
-                disabled={!newTopic.trim()}
-                className="bg-purple-600 text-white rounded-lg px-4 py-3 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
+            <div className="space-y-3">
+              <h3 className="text-white font-semibold text-sm">
+                Or add your own:
+              </h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customTopic}
+                  onChange={(e) => setCustomTopic(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addCustomTopic()}
+                  placeholder="Type a custom topic..."
+                  className="flex-1 bg-gray-800 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-500 border border-gray-700"
+                />
+                <button
+                  onClick={addCustomTopic}
+                  disabled={!customTopic.trim()}
+                  className="bg-purple-600 text-white rounded-lg px-4 py-3 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
             </div>
+          </div>
 
-            {/* Selected Topics */}
-            {topics.length > 0 && (
+          {/* Selected Topics Display */}
+          {selectedTopics.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4">
+              <h3 className="text-white font-semibold mb-3 text-sm">
+                Selected Topics ({selectedTopics.length})
+              </h3>
               <div className="flex flex-wrap gap-2">
-                {topics.map(topic => (
+                {selectedTopics.map(topic => (
                   <div
                     key={topic}
-                    className="bg-purple-600/20 border border-purple-500 rounded-full px-3 py-2 flex items-center gap-2"
+                    className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/50 rounded-full px-4 py-2 flex items-center gap-2"
                   >
-                    <span className="text-white text-sm">{topic}</span>
+                    <span className="text-white text-sm font-medium capitalize">{topic}</span>
                     <button
                       onClick={() => removeTopic(topic)}
-                      className="text-white hover:text-red-400"
+                      className="text-white/70 hover:text-red-400 transition-colors"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
               </div>
-            )}
-
-            {topics.length === 0 && (
-              <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3 text-center">
-                <p className="text-yellow-400 text-sm">
-                  ⚠️ Add at least one topic to continue
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Custom Slang Section */}
-          <div>
-            <h2 className="text-white text-xl font-bold mb-3 flex items-center gap-2">
-              📝 Custom Slang
-              <span className="text-sm font-normal text-gray-400">(Optional)</span>
-            </h2>
-            <p className="text-gray-400 text-sm mb-3">
-              Add your own slang terms to track in comments
-            </p>
-
-            {/* Add Custom Slang */}
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={newSlang}
-                onChange={(e) => setNewSlang(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addSlang()}
-                placeholder="Add slang term (e.g., yeet, vibe, goated)"
-                className="flex-1 bg-gray-800 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-500"
-              />
-              <button
-                onClick={addSlang}
-                disabled={!newSlang.trim()}
-                className="bg-purple-600 text-white rounded-lg px-4 py-3 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
             </div>
+          )}
 
-            {/* Selected Slang */}
-            {customSlang.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {customSlang.map(slang => (
-                  <div
-                    key={slang}
-                    className="bg-pink-600/20 border border-pink-500 rounded-full px-3 py-2 flex items-center gap-2"
-                  >
-                    <span className="text-white text-sm">{slang}</span>
-                    <button
-                      onClick={() => removeSlang(slang)}
-                      className="text-white hover:text-red-400"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Warning if no topics selected */}
+          {selectedTopics.length === 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 text-center">
+              <p className="text-yellow-400 text-sm">
+                ⚠️ Please select at least one topic to continue
+              </p>
+            </div>
+          )}
 
           {/* Start Button */}
           <button
             onClick={handleStart}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl px-6 py-4 text-lg font-bold hover:opacity-90 transition-all"
+            disabled={selectedTopics.length === 0}
+            className={`w-full rounded-xl px-6 py-4 text-lg font-bold transition-all flex items-center justify-center gap-2 ${
+              selectedTopics.length === 0
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg hover:shadow-purple-500/50'
+            }`}
           >
-            <Play className="w-6 h-6 inline mr-2" />
-            Start Fetching Videos
-            <ArrowRight className="w-6 h-6 inline ml-2" />
+            Start
+            <ArrowRight className="w-6 h-6" />
           </button>
-
-          {topics.length === 0 && (
-            <p className="text-center text-yellow-400 text-sm">
-              No topics selected - will use defaults: {defaultTopics.join(', ')}
-            </p>
-          )}
         </div>
 
         {/* Footer Info */}
         <div className="mt-6 text-center text-gray-500 text-sm">
-          <p>Videos will be fetched from YouTube with slang comments</p>
-          <p className="mt-1">Default slang terms: fr, ngl, bussin, sigma, rizz, and more</p>
+          <p>Videos will be fetched from YouTube with relevant comments</p>
         </div>
 
       </div>
