@@ -629,6 +629,7 @@ const handleAlreadyKnow = (term) => {
 
       setUserComments(prev => [newComment, ...prev]);
 
+      // Find this section in handleSubmitComment:
       setFeedback({
         score: evaluation.score,
         grammarScore: evaluation.grammarScore,
@@ -638,7 +639,7 @@ const handleAlreadyKnow = (term) => {
         mistakes: evaluation.mistakes,
         goodParts: evaluation.goodParts,
         message: evaluation.score >= 80
-          ? "You're cooking! 🔥"
+          ? "Excellent work!"
           : evaluation.score >= 50
           ? "Not bad, keep practicing!"
           : "Keep learning!"
@@ -646,7 +647,7 @@ const handleAlreadyKnow = (term) => {
 
       setShowFeedback(true);
       setComment('');
-      setTimeout(() => setShowFeedback(false), 8000);
+      // REMOVE THIS LINE: setTimeout(() => setShowFeedback(false), 8000);
     } catch (error) {
       console.error('Error submitting comment:', error);
 
@@ -1207,43 +1208,139 @@ const handleAlreadyKnow = (term) => {
                       </div>
 
                       {showFeedback && feedback && (
-                        <div className="sticky top-0 z-10 p-4 bg-blue-600 border-b border-gray-700">
-                          <div className="flex items-start gap-3">
-                            <div className="text-3xl">
-                              {feedback.score >= 80 ? '🔥' : feedback.score >= 50 ? '👍' : '📚'}
-                            </div>
-                            <div className="flex-1">
-                              <div className="text-white font-bold mb-1">{feedback.message}</div>
-                              <div className="text-white/90 text-sm mb-2">
-                                Overall Score: {Math.round(feedback.score)}%
+                      <div className=" top-0 z-10 p-4">
+                        <div className="bg-gradient-to-br from-purple-900/95 to-blue-900/95 backdrop-blur-md rounded-2xl shadow-lg border border-purple-500/30 p-4 max-w-[90%] mx-auto">
+                          <div className="flex items-start gap-4">
+                            {/* Score Circle */}
+                            <div className="flex-shrink-0">
+                              <div className="relative w-16 h-16">
+                                {/* Circular Progress Background */}
+                                <svg className="w-16 h-16 transform -rotate-90">
+                                  <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                    className="text-white/20"
+                                  />
+                                  <circle
+                                    cx="32"
+                                    cy="32"
+                                    r="28"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    fill="none"
+                                    strokeDasharray={`${2 * Math.PI * 28}`}
+                                    strokeDashoffset={`${2 * Math.PI * 28 * (1 - feedback.score / 100)}`}
+                                    className={`transition-all duration-1000 ${
+                                      feedback.score >= 80
+                                        ? 'text-green-400'
+                                        : feedback.score >= 50
+                                        ? 'text-yellow-400'
+                                        : 'text-red-400'
+                                    }`}
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                                {/* Score Text */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="text-white font-bold text-lg">
+                                    {Math.round(feedback.score)}
+                                  </span>
+                                </div>
                               </div>
+                            </div>
+
+                            {/* Feedback Content */}
+                            <div className="flex-1 min-w-0">
+                              {/* Header */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="text-white font-bold text-lg">{feedback.message}</h3>
+                              </div>
+
+                              {/* Score Breakdown */}
                               {feedback.grammarScore !== undefined && (
-                                <div className="text-white/80 text-xs mb-2 flex gap-3">
-                                  <span>Grammar: {feedback.grammarScore}%</span>
-                                  <span>Context: {feedback.contextScore}%</span>
-                                  <span>Natural: {feedback.naturalnessScore}%</span>
+                                <div className="grid grid-cols-3 gap-2 mb-3">
+                                  <div className="bg-white/10 rounded-lg px-2 py-1.5">
+                                    <div className="text-white/60 text-xs font-medium">Grammar</div>
+                                    <div className="text-white font-bold text-sm">{feedback.grammarScore}%</div>
+                                  </div>
+                                  <div className="bg-white/10 rounded-lg px-2 py-1.5">
+                                    <div className="text-white/60 text-xs font-medium">Context</div>
+                                    <div className="text-white font-bold text-sm">{feedback.contextScore}%</div>
+                                  </div>
+                                  <div className="bg-white/10 rounded-lg px-2 py-1.5">
+                                    <div className="text-white/60 text-xs font-medium">Natural</div>
+                                    <div className="text-white font-bold text-sm">{feedback.naturalnessScore}%</div>
+                                  </div>
                                 </div>
                               )}
+
+                              {/* Correction */}
                               {feedback.correction && feedback.correction !== comment && (
-                                <div className="text-green-300 text-xs mb-1">
-                                  ✓ Corrected: {feedback.correction}
+                                <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-2 mb-2">
+                                  <div className="flex items-start gap-2">
+                                    <Check className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-green-300 text-xs font-semibold mb-1">Suggested Correction:</div>
+                                      <div className="text-white text-sm">{feedback.correction}</div>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
+
+                              {/* Good Parts */}
                               {feedback.goodParts && feedback.goodParts.length > 0 && (
-                                <div className="text-green-300 text-xs mb-1">
-                                  ✓ Good: {feedback.goodParts.join(', ')}
+                                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2 mb-2">
+                                  <div className="flex items-start gap-2">
+                                    <Sparkles className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-green-300 text-xs font-semibold mb-1">What You Did Well:</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {feedback.goodParts.map((part, idx) => (
+                                          <span key={idx} className="text-white text-xs bg-green-500/20 px-2 py-0.5 rounded-full">
+                                            {part}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
+
+                              {/* Mistakes/Tips */}
                               {feedback.mistakes && feedback.mistakes.length > 0 && (
-                                <div className="text-red-300 text-xs mb-1">
-                                  ✗ Tips: {feedback.mistakes.join(', ')}
+                                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-2">
+                                  <div className="flex items-start gap-2">
+                                    <Lightbulb className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-orange-300 text-xs font-semibold mb-1">Tips for Improvement:</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {feedback.mistakes.map((mistake, idx) => (
+                                          <span key={idx} className="text-white text-xs bg-orange-500/20 px-2 py-0.5 rounded-full">
+                                            {mistake}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </div>
+
+                            {/* Close Button */}
+                            <button
+                              onClick={() => setShowFeedback(false)}
+                              className="flex-shrink-0 p-1 hover:bg-white/10 rounded-full transition-colors"
+                            >
+                              <X className="w-5 h-5 text-white/70 hover:text-white" />
+                            </button>
                           </div>
                         </div>
-                      )}
-
+                      </div>
+                    )}
                       <div className="flex-1 overflow-y-auto p-4 space-y-4">
                       {currentVideo.top_comments && currentVideo.top_comments.slice(0, 10).map((c, idx) => {
                       const commentId = c.comment_id;
@@ -1336,18 +1433,8 @@ const handleAlreadyKnow = (term) => {
                                 {hasExplanation.translation}
                               </div>
 
-                              {hasExplanation.slangBreakdown && hasExplanation.slangBreakdown.length > 0 && (
-                                <div className="space-y-2 border-t border-blue-500/20 pt-3">
-                                  <div className="text-purple-300 font-semibold text-xs mb-2">Slang Breakdown:</div>
-                                  {hasExplanation.slangBreakdown.map((slang, idx) => (
-                                    <div key={idx} className="bg-black/20 rounded p-2">
-                                      <div className="text-yellow-300 font-bold text-xs">{slang.term}</div>
-                                      <div className="text-white/80 text-xs mt-1">{slang.definition}</div>
-                                      <div className="text-gray-400 italic text-xs mt-1">"{slang.usage}"</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              
+                              
                             </div>
                           )}
                         </div>
