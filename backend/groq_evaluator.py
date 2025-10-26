@@ -43,7 +43,8 @@ class GroqCommentEvaluator:
         user_comment: str,
         target_language: str,
         video_like_count: int,
-        available_slang: List[str] = None
+        available_slang: List[str] = None,
+        forbidden_slang: List[str] = None
     ) -> Dict:
         """
         Evaluate a user's comment with detailed scoring and feedback.
@@ -55,6 +56,7 @@ class GroqCommentEvaluator:
             target_language: Language being learned (e.g., "English", "Spanish")
             video_like_count: Number of likes on the video (for like calculation)
             available_slang: List of slang terms available in the video
+            forbidden_slang: List of slang from example comments (user shouldn't copy these)
 
         Returns:
             Dictionary with score, likes, feedback, and detailed breakdown
@@ -62,8 +64,14 @@ class GroqCommentEvaluator:
         # Detect which slang terms user attempted to use
         if available_slang is None:
             available_slang = []
+        if forbidden_slang is None:
+            forbidden_slang = []
 
         detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
+
+        # Classify slang into allowed vs forbidden
+        detected_forbidden = self._detect_slang_in_comment(user_comment, forbidden_slang)
+        allowed_slang_used = [s for s in detected_slang if s not in detected_forbidden]
 
         # Construct evaluation prompt with slang focus
         prompt = self._build_evaluation_prompt(
@@ -272,14 +280,20 @@ class GroqCommentEvaluator:
         user_comment: str,
         target_language: str,
         available_slang: List[str] = None,
-        detected_slang: List[str] = None
+        allowed_slang_used: List[str] = None,
+        forbidden_slang: List[str] = None,
+        detected_forbidden: List[str] = None
     ) -> str:
         """Build the evaluation prompt with focus on cultural adaptation and communication effectiveness."""
 
         if available_slang is None:
             available_slang = []
-        if detected_slang is None:
-            detected_slang = []
+        if allowed_slang_used is None:
+            allowed_slang_used = []
+        if forbidden_slang is None:
+            forbidden_slang = []
+        if detected_forbidden is None:
+            detected_forbidden = []
 
         # Build slang context section
         slang_context = ""
@@ -634,6 +648,7 @@ Output ONLY the username with no explanation or punctuation."""
         video_title: str,
         target_language: str,
         available_slang: List[str] = None,
+        forbidden_slang: List[str] = None,
         num_responses: int = None
     ) -> List[Dict]:
         """
@@ -647,6 +662,7 @@ Output ONLY the username with no explanation or punctuation."""
             video_title: Title of the video
             target_language: Language being learned
             available_slang: Slang terms available in the video
+            forbidden_slang: Slang from example comments (user shouldn't copy these)
             num_responses: Number of responses to generate (2-4, random if None)
 
         Returns:
@@ -655,8 +671,14 @@ Output ONLY the username with no explanation or punctuation."""
         # Detect slang usage
         if available_slang is None:
             available_slang = []
+        if forbidden_slang is None:
+            forbidden_slang = []
 
         detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
+
+        # Classify slang into allowed vs forbidden
+        detected_forbidden = self._detect_slang_in_comment(user_comment, forbidden_slang)
+        allowed_slang_used = [s for s in detected_slang if s not in detected_forbidden]
 
         # Calculate response count based on score if not specified
         if num_responses is None:
@@ -680,7 +702,9 @@ Output ONLY the username with no explanation or punctuation."""
                     video_title,
                     target_language,
                     available_slang,
-                    detected_slang,
+                    allowed_slang_used,
+                    forbidden_slang,
+                    detected_forbidden,
                     response_index=i
                 )
 
@@ -724,20 +748,23 @@ Output ONLY the username with no explanation or punctuation."""
         video_title: str,
         target_language: str,
         available_slang: List[str],
-        detected_slang: List[str],
+        allowed_slang_used: List[str],
+        forbidden_slang: List[str],
+        detected_forbidden: List[str],
         response_index: int
     ) -> str:
-        """Build a natural response prompt without forced personality."""
-        
+        """Build a natural response prompt with forbidden slang awareness."""
+
         mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
-        
-        # Build minimal slang context - don't label it as "detected" or "available"
+
+        # Build slang context with forbidden slang awareness
         slang_context = ""
-        if detected_slang:
-            slang_context = f"\nSlang in their comment: {', '.join(detected_slang)}"
-        if available_slang and not detected_slang:
-            # Only show available slang if they didn't use any
-            slang_context = f"\nCommon slang for this: {', '.join(available_slang[:2])}"
+        if allowed_slang_used:
+            slang_context = f"\nThey used DIFFERENT slang (not from examples): {', '.join(allowed_slang_used)}"
+        elif detected_forbidden:
+            slang_context = f"\nThey copied slang from examples: {', '.join(detected_forbidden)} (not creative)"
+        elif forbidden_slang:
+            slang_context = f"\nThey didn't use any slang (examples had: {', '.join(forbidden_slang[:2])})"
 
         # Simple variation without personality engineering
         response_styles = [
@@ -785,6 +812,12 @@ Examples of natural responses:
 "'I learning' - bro"
 "fire comment ngl"
 "that's not how you use that slang lol"
+"respect for using different slang"
+"wait you actually used new slang?"
+"caught you copying the examples 💀"
+"bro just copied what others said"
+"at least try some different slang"
+"okay I see you getting creative with it"
 
 Just write the comment (1-2 sentences max). Nothing else."""
 
