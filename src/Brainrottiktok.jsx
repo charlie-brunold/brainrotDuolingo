@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react'; 
-import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Check, Plus } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Check, Plus, Languages, Loader2 } from 'lucide-react';
 import MySlang from './Myslang.jsx';
 
 // --- SLANG TERMS (Static Data) ---
@@ -101,6 +101,41 @@ export default function BrainrotTikTok({ shortsData }) {
     const saved = sessionStorage.getItem('brainrot_known_words');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Translation state
+  const [translationState, setTranslationState] = useState('idle'); // 'idle' | 'loading' | 'playing' | 'error'
+  const [translationCache, setTranslationCache] = useState({});
+  const [translationError, setTranslationError] = useState('');
+  const [showSubtitles, setShowSubtitles] = useState(false);
+  const [subtitleText, setSubtitleText] = useState('');
+  const audioRef = useRef(null);
+  const youtubePlayerRef = useRef(null);
+  const isDestroyingPlayerRef = useRef(false);
+  const [youtubeAPIReady, setYoutubeAPIReady] = useState(false);
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    // Check if API is already loaded
+    if (window.YT && window.YT.Player) {
+      setYoutubeAPIReady(true);
+      return;
+    }
+
+    // Load the IFrame Player API code asynchronously
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    // API will call this function when ready
+    window.onYouTubeIframeAPIReady = () => {
+      setYoutubeAPIReady(true);
+    };
+
+    return () => {
+      window.onYouTubeIframeAPIReady = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (currentVideoIndex === 0 && !isVideoReady) {
@@ -629,6 +664,329 @@ const handleAlreadyKnow = (term) => {
     }
   };
 
+  const handleTranslate = async () => {
+    if (!videoId) {
+      setTranslationError('Video ID not available');
+      setTranslationState('error');
+      setTimeout(() => setTranslationState('idle'), 3000);
+      return;
+    }
+
+    // If already playing, stop translation
+    if (translationState === 'playing') {
+      handleStopTranslation();
+      return;
+    }
+
+    // Check cache first
+    if (translationCache[videoId]) {
+      console.log('Using cached translation');
+      playTranslation(translationCache[videoId]);
+      return;
+    }
+
+    // Fetch new translation
+    setTranslationState('loading');
+    setTranslationError('');
+
+    try {
+      const response = await fetch('http://localhost:3001/api/translate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_id: videoId,
+          target_language: 'Spanish'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Translation failed');
+      }
+
+      const data = await response.json();
+
+      // Convert base64 audio to blob URL
+      const audioBlob = base64ToBlob(data.audio_base64, 'audio/mp3');
+      const audioBlobUrl = URL.createObjectURL(audioBlob);
+
+      const translationData = {
+        audioUrl: audioBlobUrl,
+        translatedText: data.translated_text,
+        originalTranscript: data.original_transcript
+      };
+
+      // Cache the translation
+      setTranslationCache(prev => ({
+        ...prev,
+        [videoId]: translationData
+      }));
+
+      // Play the translation
+      playTranslation(translationData);
+
+    } catch (error) {
+      console.error('Error translating video:', error);
+      setTranslationError('Translation unavailable');
+      setTranslationState('error');
+      setTimeout(() => {
+        setTranslationState('idle');
+        setTranslationError('');
+      }, 3000);
+    }
+  };
+
+  const base64ToBlob = (base64, mimeType) => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  };
+
+  const playTranslation = (translationData) => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+
+    const audio = audioRef.current;
+    audio.src = translationData.audioUrl;
+
+    // Set subtitle text
+    setSubtitleText(translationData.translatedText);
+    setShowSubtitles(true);
+
+    // When audio metadata is loaded, adjust playback speed if needed
+    audio.onloadedmetadata = () => {
+      const audioDuration = audio.duration;
+
+      // Try to get actual video duration from YouTube Player API
+      let videoDuration = 60; // Default fallback
+      if (youtubePlayerRef.current && youtubePlayerRef.current.getDuration) {
+        try {
+          videoDuration = youtubePlayerRef.current.getDuration();
+          console.log(`Video duration: ${videoDuration.toFixed(2)}s`);
+        } catch (e) {
+          console.warn('Could not get video duration, using default:', e);
+        }
+      }
+
+      // If audio is longer than video, speed it up (max 2x)
+      if (audioDuration > videoDuration) {
+        const speedAdjustment = Math.min(audioDuration / videoDuration, 2.0);
+        audio.playbackRate = speedAdjustment;
+        console.log(`Audio speed adjusted to ${speedAdjustment.toFixed(2)}x (audio: ${audioDuration.toFixed(2)}s, video: ${videoDuration.toFixed(2)}s)`);
+      } else {
+        console.log(`Audio duration (${audioDuration.toFixed(2)}s) fits within video (${videoDuration.toFixed(2)}s)`);
+      }
+
+      // Mute and restart video using YouTube Player API
+      if (youtubePlayerRef.current) {
+        try {
+          youtubePlayerRef.current.mute();
+          youtubePlayerRef.current.seekTo(0, true);
+
+          // Wait for video to start playing before starting audio
+          const checkVideoPlaying = setInterval(() => {
+            if (youtubePlayerRef.current && youtubePlayerRef.current.getPlayerState) {
+              const state = youtubePlayerRef.current.getPlayerState();
+              // YT.PlayerState.PLAYING = 1
+              if (state === 1) {
+                clearInterval(checkVideoPlaying);
+                audio.play();
+                setTranslationState('playing');
+              }
+            }
+          }, 100);
+
+          // Safety timeout to prevent infinite loop
+          setTimeout(() => {
+            clearInterval(checkVideoPlaying);
+            if (translationState !== 'playing') {
+              // If video hasn't started playing, just start audio anyway
+              audio.play();
+              setTranslationState('playing');
+            }
+          }, 3000);
+
+        } catch (e) {
+          console.error('Error controlling YouTube player:', e);
+          // Fallback: just play audio
+          audio.play();
+          setTranslationState('playing');
+        }
+      } else {
+        // No player ref, fallback to direct audio play
+        audio.play();
+        setTranslationState('playing');
+      }
+    };
+
+    // When audio ends, reset state
+    audio.onended = () => {
+      handleStopTranslation();
+    };
+
+    audio.onerror = () => {
+      console.error('Audio playback error');
+      setTranslationError('Playback failed');
+      setTranslationState('error');
+      setShowSubtitles(false);
+      setTimeout(() => {
+        setTranslationState('idle');
+        setTranslationError('');
+      }, 3000);
+    };
+  };
+
+  const handleStopTranslation = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    // Unmute video using YouTube Player API (do NOT restart)
+    if (youtubePlayerRef.current) {
+      try {
+        youtubePlayerRef.current.unMute();
+        // Video continues playing from current position
+      } catch (e) {
+        console.error('Error unmuting video:', e);
+      }
+    }
+
+    setTranslationState('idle');
+    setShowSubtitles(false);
+    setSubtitleText('');
+  };
+
+  // Initialize YouTube Player when video changes
+  useEffect(() => {
+    if (!youtubeAPIReady || !videoId) return;
+
+    // Wait if a player is currently being destroyed
+    if (isDestroyingPlayerRef.current) {
+      console.log('Player destruction in progress, waiting...');
+      return;
+    }
+
+    // Clean up previous player
+    const destroyPreviousPlayer = () => {
+      if (youtubePlayerRef.current) {
+        isDestroyingPlayerRef.current = true;
+
+        try {
+          // Check if the player still has a valid iframe
+          const playerIframe = youtubePlayerRef.current.getIframe?.();
+
+          // Verify iframe exists AND is still in the document
+          if (playerIframe && playerIframe.parentNode && document.contains(playerIframe)) {
+            // Player iframe exists in DOM, safe to destroy
+            if (typeof youtubePlayerRef.current.destroy === 'function') {
+              try {
+                youtubePlayerRef.current.destroy();
+              } catch (destroyError) {
+                // Catch specific removeChild errors during destroy
+                if (destroyError.name === 'NotFoundError' || destroyError.message.includes('removeChild')) {
+                  console.log('DOM already modified during destroy, safe to ignore');
+                } else {
+                  console.warn('Error during player destroy:', destroyError);
+                }
+              }
+            }
+          } else {
+            // Iframe already removed from DOM, just clear the ref
+            console.log('Player iframe already removed from DOM, skipping destroy()');
+          }
+        } catch (error) {
+          // Player already destroyed or DOM already modified
+          console.log('Player cleanup handled:', error.message);
+        } finally {
+          youtubePlayerRef.current = null;
+          isDestroyingPlayerRef.current = false;
+        }
+      }
+    };
+
+    destroyPreviousPlayer();
+
+    // Initialize new player
+    const playerId = `youtube-player-${videoId}`;
+    const playerElement = document.getElementById(playerId);
+
+    if (playerElement && window.YT && window.YT.Player) {
+      try {
+        youtubePlayerRef.current = new window.YT.Player(playerId, {
+          videoId: videoId,
+          playerVars: {
+            autoplay: 1,
+            mute: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1
+          },
+          events: {
+            onReady: (event) => {
+              console.log('YouTube player ready for video:', videoId);
+              isDestroyingPlayerRef.current = false;
+            },
+            onStateChange: (event) => {
+              // You can add state change handlers here if needed
+              // event.data values: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error initializing YouTube player:', error);
+        isDestroyingPlayerRef.current = false;
+      }
+    }
+
+    return () => {
+      // Cleanup on unmount
+      if (youtubePlayerRef.current) {
+        isDestroyingPlayerRef.current = true;
+
+        try {
+          const playerIframe = youtubePlayerRef.current.getIframe?.();
+
+          // Verify iframe exists AND is still in the document
+          if (playerIframe && playerIframe.parentNode && document.contains(playerIframe)) {
+            if (typeof youtubePlayerRef.current.destroy === 'function') {
+              try {
+                youtubePlayerRef.current.destroy();
+              } catch (destroyError) {
+                // Catch specific removeChild errors during destroy
+                if (destroyError.name === 'NotFoundError' || destroyError.message.includes('removeChild')) {
+                  console.log('Cleanup: DOM already modified during destroy, safe to ignore');
+                } else {
+                  console.warn('Cleanup error during player destroy:', destroyError);
+                }
+              }
+            }
+          } else {
+            console.log('Cleanup: iframe already removed from DOM, skipping destroy()');
+          }
+        } catch (error) {
+          console.log('Cleanup error (safe to ignore):', error.message);
+        } finally {
+          youtubePlayerRef.current = null;
+          isDestroyingPlayerRef.current = false;
+        }
+      }
+    };
+  }, [youtubeAPIReady, videoId]);
+
+  // Clean up translation state when video changes
+  useEffect(() => {
+    handleStopTranslation();
+    setTranslationError('');
+  }, [currentVideoIndex]);
+
   if (!currentVideo) {
     return (
       <div className="h-screen w-full bg-black flex items-center justify-center">
@@ -691,21 +1049,13 @@ const handleAlreadyKnow = (term) => {
                       zIndex: isCurrentVideo ? 1 : 0
                     }}
                   >
-                    {videoIdForIndex && isCurrentVideo ? (
-                      <iframe
-                        key={`iframe-${videoIdForIndex}-${currentVideoIndex}`}
-                        width="100%"
-                        height="100%"
-                        src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=1&mute=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
-                        title={video.title}
-                        frameBorder="0"
-                        allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
+                    {videoIdForIndex ? (
+                      <div
+                        key={`player-${videoIdForIndex}`}
+                        id={`youtube-player-${videoIdForIndex}`}
                         className="absolute inset-0"
-                        style={{ objectFit: 'cover' }}
+                        style={{ width: '100%', height: '100%' }}
                       />
-                    ) : videoIdForIndex ? (
-                      <div className="w-full h-full bg-black" />
                     ) : (
                       <div className="text-center text-white p-8">
                         <img
@@ -720,7 +1070,28 @@ const handleAlreadyKnow = (term) => {
                   </div>
                 );
               })}
-            </div>   
+            </div>
+
+            {/* Subtitle Overlay */}
+            {showSubtitles && subtitleText && (
+              <div className="absolute bottom-32 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
+                <div className="max-w-2xl w-full">
+                  <div className="relative bg-black/80 backdrop-blur-sm rounded-lg px-6 py-3">
+                    <p className="text-white text-center text-lg font-medium leading-relaxed" style={{
+                      textShadow: '2px 2px 4px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.5)'
+                    }}>
+                      {subtitleText}
+                    </p>
+                    <button
+                      onClick={() => setShowSubtitles(false)}
+                      className="absolute top-2 right-2 p-1 hover:bg-white/20 rounded-full transition-colors pointer-events-auto"
+                    >
+                      <X className="w-4 h-4 text-white/80 hover:text-white" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="absolute inset-0 pointer-events-none">
               <div className="h-full w-full relative pointer-events-auto" style={{ pointerEvents: 'none' }}>
@@ -765,6 +1136,37 @@ const handleAlreadyKnow = (term) => {
                   <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
                     <Share2 className="w-7 h-7 text-white" />
                   </div>
+
+                  {/* Translation Button */}
+                  <div className="flex flex-col items-center gap-1 relative">
+                    <button
+                      onClick={handleTranslate}
+                      disabled={translationState === 'loading'}
+                      className={`p-3 backdrop-blur-sm rounded-full transition-all relative ${
+                        translationState === 'playing'
+                          ? 'bg-green-500/80'
+                          : translationState === 'error'
+                          ? 'bg-red-500/80'
+                          : translationState === 'loading'
+                          ? 'bg-white/20 cursor-not-allowed'
+                          : 'bg-white/20 hover:bg-white/30'
+                      }`}
+                    >
+                      {translationState === 'loading' ? (
+                        <Loader2 className="w-7 h-7 text-white animate-spin" />
+                      ) : (
+                        <Languages className="w-7 h-7 text-white" />
+                      )}
+                    </button>
+
+                    {/* Error Tooltip */}
+                    {translationState === 'error' && translationError && (
+                      <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-red-600 text-white text-xs py-1 px-3 rounded whitespace-nowrap shadow-lg">
+                        {translationError}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
                     <Bookmark className="w-7 h-7 text-white" />
                   </div>
@@ -843,114 +1245,114 @@ const handleAlreadyKnow = (term) => {
                       )}
 
                       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {currentVideo.top_comments && currentVideo.top_comments.slice(0, 10).map((c, idx) => {
-                          const commentId = c.comment_id;
-                          const tokens = tokenizeText(c.text);
-                          const hasExplanation = explanations[commentId];
-                          const isExplanationActive = activeExplanation === commentId;
-                          const isLoadingExplanation = loadingExplanation === commentId;
+                      {currentVideo.top_comments && currentVideo.top_comments.slice(0, 10).map((c, idx) => {
+                      const commentId = c.comment_id;
+                      const tokens = tokenizeText(c.text);
+                      const hasExplanation = explanations[commentId];
+                      const isExplanationActive = activeExplanation === commentId;
+                      const isLoadingExplanation = loadingExplanation === commentId;
 
-                          return (
-                            <div key={commentId} className="relative">
-                              <div className="flex gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-white font-semibold text-sm">{c.author}</div>
-                                  </div>
-                                  <div className="text-white/90 text-sm mt-1 leading-relaxed">
-                                    {tokens.map((token, i) => {
-                                      if (!token.isWord) {
-                                        return <span key={i}>{token.text}</span>;
-                                      }
+                      return (
+                        <div key={commentId} className="relative">
+                          <div className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="text-white font-semibold text-sm">{c.author}</div>
+                                <button
+                                  onClick={() => handleExplainClick(commentId, c.text, c.detected_slang || [])}
+                                  disabled={isLoadingExplanation}
+                                  className={`transition-colors ${
+                                    isExplanationActive
+                                      ? 'text-yellow-300'
+                                      : 'text-yellow-400 hover:text-yellow-300'
+                                  }`}
+                                  title="Explain this comment"
+                                >
+                                  {isLoadingExplanation ? (
+                                    <div className="w-4 h-4 border border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Lightbulb className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                              <div className="text-white/90 text-sm mt-1 leading-relaxed">
+                                {tokens.map((token, i) => {
+                                  if (!token.isWord) {
+                                    return <span key={i}>{token.text}</span>;
+                                  }
 
-                                      // Only make words hoverable if explanation has been loaded
-                                      if (!hasExplanation) {
-                                        return <span key={i}>{token.text}</span>;
-                                      }
+                                  // Only make words hoverable if explanation has been loaded
+                                  if (!hasExplanation) {
+                                    return <span key={i}>{token.text}</span>;
+                                  }
 
-                                      let className = "cursor-pointer transition-colors border-b border-dotted ";
-                                      if (token.isLearned) {
-                                        className += "text-green-400 border-green-400";
-                                      } else if (token.isKnown) {
-                                        className += "text-gray-400 border-gray-600";
-                                      } else {
-                                        className += "text-white border-white/30 hover:border-white hover:text-blue-300";
-                                      }
+                                  let className = "cursor-pointer transition-colors border-b border-dotted ";
+                                  if (token.isLearned) {
+                                    className += "text-green-400 border-green-400";
+                                  } else if (token.isKnown) {
+                                    className += "text-gray-400 border-gray-600";
+                                  } else {
+                                    className += "text-white border-white/30 hover:border-white hover:text-blue-300";
+                                  }
 
-                                      return (
-                                        <span
-                                          key={i}
-                                          className={className}
-                                          onMouseEnter={(e) => handleWordHover(token.cleanWord, e)}
-                                          onMouseLeave={handleWordLeave}
-                                        >
-                                          {token.text}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="flex gap-4 mt-2">
-                                    <button className="text-gray-400 text-xs flex items-center gap-1">
-                                      <Heart className="w-3 h-3" /> {c.like_count}
-                                    </button>
-                                    <button
-                                      onClick={() => handleExplainClick(commentId, c.text, c.detected_slang || [])}
-                                      disabled={isLoadingExplanation}
-                                      className={`text-xs flex items-center gap-1 transition-colors ${
-                                        isExplanationActive
-                                          ? 'text-yellow-400'
-                                          : 'text-gray-400 hover:text-yellow-300'
-                                      }`}
+                                  return (
+                                    <span
+                                      key={i}
+                                      className={className}
+                                      onMouseEnter={(e) => handleWordHover(token.cleanWord, e)}
+                                      onMouseLeave={handleWordLeave}
                                     >
-                                      {isLoadingExplanation ? (
-                                        <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                                      ) : (
-                                        <Lightbulb className="w-3 h-3" />
-                                      )}
-                                      {isLoadingExplanation ? 'Loading...' : 'Explain'}
-                                    </button>
-                                  </div>
+                                      {token.text}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex gap-4 mt-2">
+                                <button className="text-gray-400 text-xs flex items-center gap-1">
+                                  <Heart className="w-3 h-3" /> {c.like_count}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Explanation UI */}
+                          {isExplanationActive && hasExplanation && (
+                            <div className="mt-3 ml-11 bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="text-blue-300 font-semibold text-xs flex items-center gap-1">
+                                  <Lightbulb className="w-4 h-4" />
+                                  Simplified Translation
                                 </div>
+                                <button
+                                  onClick={() => setActiveExplanation(null)}
+                                  className="text-gray-400 hover:text-white transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               </div>
 
-                              {/* Explanation UI */}
-                              {isExplanationActive && hasExplanation && (
-                                <div className="mt-3 ml-11 bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
-                                  <div className="flex items-start justify-between mb-3">
-                                    <div className="text-blue-300 font-semibold text-xs flex items-center gap-1">
-                                      <Lightbulb className="w-4 h-4" />
-                                      Simplified Translation
-                                    </div>
-                                    <button
-                                      onClick={() => setActiveExplanation(null)}
-                                      className="text-gray-400 hover:text-white transition-colors"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
+                              <div className="text-white/90 text-sm mb-3 leading-relaxed">
+                                {hasExplanation.translation}
+                              </div>
 
-                                  <div className="text-white/90 text-sm mb-3 leading-relaxed">
-                                    {hasExplanation.translation}
-                                  </div>
-
-                                  {hasExplanation.slangBreakdown && hasExplanation.slangBreakdown.length > 0 && (
-                                    <div className="space-y-2 border-t border-blue-500/20 pt-3">
-                                      <div className="text-purple-300 font-semibold text-xs mb-2">Slang Breakdown:</div>
-                                      {hasExplanation.slangBreakdown.map((slang, idx) => (
-                                        <div key={idx} className="bg-black/20 rounded p-2">
-                                          <div className="text-yellow-300 font-bold text-xs">{slang.term}</div>
-                                          <div className="text-white/80 text-xs mt-1">{slang.definition}</div>
-                                          <div className="text-gray-400 italic text-xs mt-1">"{slang.usage}"</div>
-                                        </div>
-                                      ))}
+                              {hasExplanation.slangBreakdown && hasExplanation.slangBreakdown.length > 0 && (
+                                <div className="space-y-2 border-t border-blue-500/20 pt-3">
+                                  <div className="text-purple-300 font-semibold text-xs mb-2">Slang Breakdown:</div>
+                                  {hasExplanation.slangBreakdown.map((slang, idx) => (
+                                    <div key={idx} className="bg-black/20 rounded p-2">
+                                      <div className="text-yellow-300 font-bold text-xs">{slang.term}</div>
+                                      <div className="text-white/80 text-xs mt-1">{slang.definition}</div>
+                                      <div className="text-gray-400 italic text-xs mt-1">"{slang.usage}"</div>
                                     </div>
-                                  )}
+                                  ))}
                                 </div>
                               )}
                             </div>
-                          );
-                        })}
+                          )}
+                        </div>
+                      );
+                    })}
 
                         {hoveredWord && (
                           <div
