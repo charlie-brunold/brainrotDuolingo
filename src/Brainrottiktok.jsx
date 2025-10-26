@@ -1097,19 +1097,19 @@ const handleNavigateToVideo = (videoId) => {
 
             {/* Subtitle Overlay */}
             {showSubtitles && subtitleText && (
-              <div className="absolute bottom-32 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
-                <div className="max-w-2xl w-full">
-                  <div className="relative bg-black/80 backdrop-blur-sm rounded-lg px-6 py-3">
-                    <p className="text-white text-center text-lg font-medium leading-relaxed" style={{
-                      textShadow: '2px 2px 4px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.5)'
+              <div className="absolute bottom-20 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
+                <div className="max-w-lg">
+                  <div className="relative bg-black/60 backdrop-blur-sm rounded px-3 py-1.5">
+                    <p className="text-white text-center text-sm font-normal leading-snug" style={{
+                      textShadow: '1px 1px 2px rgba(0,0,0,0.9)'
                     }}>
                       {subtitleText}
                     </p>
                     <button
                       onClick={() => setShowSubtitles(false)}
-                      className="absolute top-2 right-2 p-1 hover:bg-white/20 rounded-full transition-colors pointer-events-auto"
+                      className="absolute -top-1 -right-1 p-0.5 bg-black/40 hover:bg-black/60 rounded-full transition-colors pointer-events-auto"
                     >
-                      <X className="w-4 h-4 text-white/80 hover:text-white" />
+                      <X className="w-3 h-3 text-white/70 hover:text-white" />
                     </button>
                   </div>
                 </div>
