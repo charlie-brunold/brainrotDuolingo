@@ -19,6 +19,7 @@ export default function HomePage({ onStartFetching }) {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [customTopic, setCustomTopic] = useState('');
   const [typedText, setTypedText] = useState('');
+  const [showCursor, setShowCursor] = useState(true);
   
   const fullText = "Select your interests to customize your language learning experience!";
 
@@ -31,7 +32,16 @@ export default function HomePage({ onStartFetching }) {
       
       return () => clearTimeout(timeout);
     }
-  }, [typedText]);
+  }, [typedText, fullText]);
+
+  // Blinking cursor effect
+  useEffect(() => {
+    const cursorInterval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 500); // Cursor blink speed
+    
+    return () => clearInterval(cursorInterval);
+  }, []);
 
   // Predefined topic bubbles
   const predefinedTopics = [
@@ -113,12 +123,24 @@ export default function HomePage({ onStartFetching }) {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-           <img src="/icon.png" alt="Logo" className="w-12 h-12 rounded-xl shadow-lg" />
+            <img src="/icon.png" alt="Logo" className="w-12 h-12 rounded-xl shadow-lg" />
             <h1 className="text-4xl font-bold text-white">Brain Thought</h1>
           </div>
-          <p className="text-gray-400">
-            Select your interests to customize your language learning experience!
-          </p>
+          
+          {/* Typing Animation Description */}
+          <div className="h-8 flex items-center justify-center">
+            <p className="text-gray-400 text-lg">
+              {typedText}
+              <span 
+                className={`inline-block w-0.5 h-5 bg-gray-400 ml-1 ${
+                  showCursor && typedText.length < fullText.length ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{
+                  animation: typedText.length === fullText.length ? 'blink 1s infinite' : 'none'
+                }}
+              />
+            </p>
+          </div>
         </div>
 
         {/* Main Card */}
@@ -230,6 +252,14 @@ export default function HomePage({ onStartFetching }) {
         </div>
 
       </div>
+
+      {/* Add CSS for cursor blink animation */}
+      <style jsx>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

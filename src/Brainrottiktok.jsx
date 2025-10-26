@@ -646,7 +646,7 @@ const handleNavigateToVideo = (videoId) => {
         aiResponses: aiResponses
       };
 
-      setUserComments(prev => [newComment, ...prev]);
+      setUserComments(prev => [...prev,newComment]);
 
       setFeedback({
         score: evaluation.score,
@@ -1267,114 +1267,114 @@ const handleNavigateToVideo = (videoId) => {
                       )}
 
                       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {currentVideo.top_comments && currentVideo.top_comments.slice(0, 10).map((c, idx) => {
-                          const commentId = c.comment_id;
-                          const tokens = tokenizeText(c.text);
-                          const hasExplanation = explanations[commentId];
-                          const isExplanationActive = activeExplanation === commentId;
-                          const isLoadingExplanation = loadingExplanation === commentId;
+                      {currentVideo.top_comments && currentVideo.top_comments.slice(0, 10).map((c, idx) => {
+                      const commentId = c.comment_id;
+                      const tokens = tokenizeText(c.text);
+                      const hasExplanation = explanations[commentId];
+                      const isExplanationActive = activeExplanation === commentId;
+                      const isLoadingExplanation = loadingExplanation === commentId;
 
-                          return (
-                            <div key={commentId} className="relative">
-                              <div className="flex gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="text-white font-semibold text-sm">{c.author}</div>
-                                  </div>
-                                  <div className="text-white/90 text-sm mt-1 leading-relaxed">
-                                    {tokens.map((token, i) => {
-                                      if (!token.isWord) {
-                                        return <span key={i}>{token.text}</span>;
-                                      }
+                      return (
+                        <div key={commentId} className="relative">
+                          <div className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="text-white font-semibold text-sm">{c.author}</div>
+                                <button
+                                  onClick={() => handleExplainClick(commentId, c.text, c.detected_slang || [])}
+                                  disabled={isLoadingExplanation}
+                                  className={`transition-colors ${
+                                    isExplanationActive
+                                      ? 'text-yellow-300'
+                                      : 'text-yellow-400 hover:text-yellow-300'
+                                  }`}
+                                  title="Explain this comment"
+                                >
+                                  {isLoadingExplanation ? (
+                                    <div className="w-4 h-4 border border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Lightbulb className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                              <div className="text-white/90 text-sm mt-1 leading-relaxed">
+                                {tokens.map((token, i) => {
+                                  if (!token.isWord) {
+                                    return <span key={i}>{token.text}</span>;
+                                  }
 
-                                      // Only make words hoverable if explanation has been loaded
-                                      if (!hasExplanation) {
-                                        return <span key={i}>{token.text}</span>;
-                                      }
+                                  // Only make words hoverable if explanation has been loaded
+                                  if (!hasExplanation) {
+                                    return <span key={i}>{token.text}</span>;
+                                  }
 
-                                      let className = "cursor-pointer transition-colors border-b border-dotted ";
-                                      if (token.isLearned) {
-                                        className += "text-green-400 border-green-400";
-                                      } else if (token.isKnown) {
-                                        className += "text-gray-400 border-gray-600";
-                                      } else {
-                                        className += "text-white border-white/30 hover:border-white hover:text-blue-300";
-                                      }
+                                  let className = "cursor-pointer transition-colors border-b border-dotted ";
+                                  if (token.isLearned) {
+                                    className += "text-green-400 border-green-400";
+                                  } else if (token.isKnown) {
+                                    className += "text-gray-400 border-gray-600";
+                                  } else {
+                                    className += "text-white border-white/30 hover:border-white hover:text-blue-300";
+                                  }
 
-                                      return (
-                                        <span
-                                          key={i}
-                                          className={className}
-                                          onMouseEnter={(e) => handleWordHover(token.cleanWord, e)}
-                                          onMouseLeave={handleWordLeave}
-                                        >
-                                          {token.text}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="flex gap-4 mt-2">
-                                    <button className="text-gray-400 text-xs flex items-center gap-1">
-                                      <Heart className="w-3 h-3" /> {c.like_count}
-                                    </button>
-                                    <button
-                                      onClick={() => handleExplainClick(commentId, c.text, c.detected_slang || [])}
-                                      disabled={isLoadingExplanation}
-                                      className={`text-xs flex items-center gap-1 transition-colors ${
-                                        isExplanationActive
-                                          ? 'text-yellow-400'
-                                          : 'text-gray-400 hover:text-yellow-300'
-                                      }`}
+                                  return (
+                                    <span
+                                      key={i}
+                                      className={className}
+                                      onMouseEnter={(e) => handleWordHover(token.cleanWord, e)}
+                                      onMouseLeave={handleWordLeave}
                                     >
-                                      {isLoadingExplanation ? (
-                                        <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-                                      ) : (
-                                        <Lightbulb className="w-3 h-3" />
-                                      )}
-                                      {isLoadingExplanation ? 'Loading...' : 'Explain'}
-                                    </button>
-                                  </div>
+                                      {token.text}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex gap-4 mt-2">
+                                <button className="text-gray-400 text-xs flex items-center gap-1">
+                                  <Heart className="w-3 h-3" /> {c.like_count}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Explanation UI */}
+                          {isExplanationActive && hasExplanation && (
+                            <div className="mt-3 ml-11 bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="text-blue-300 font-semibold text-xs flex items-center gap-1">
+                                  <Lightbulb className="w-4 h-4" />
+                                  Simplified Translation
                                 </div>
+                                <button
+                                  onClick={() => setActiveExplanation(null)}
+                                  className="text-gray-400 hover:text-white transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               </div>
 
-                              {/* Explanation UI */}
-                              {isExplanationActive && hasExplanation && (
-                                <div className="mt-3 ml-11 bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-lg p-4 border border-blue-500/30">
-                                  <div className="flex items-start justify-between mb-3">
-                                    <div className="text-blue-300 font-semibold text-xs flex items-center gap-1">
-                                      <Lightbulb className="w-4 h-4" />
-                                      Simplified Translation
-                                    </div>
-                                    <button
-                                      onClick={() => setActiveExplanation(null)}
-                                      className="text-gray-400 hover:text-white transition-colors"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
+                              <div className="text-white/90 text-sm mb-3 leading-relaxed">
+                                {hasExplanation.translation}
+                              </div>
 
-                                  <div className="text-white/90 text-sm mb-3 leading-relaxed">
-                                    {hasExplanation.translation}
-                                  </div>
-
-                                  {hasExplanation.slangBreakdown && hasExplanation.slangBreakdown.length > 0 && (
-                                    <div className="space-y-2 border-t border-blue-500/20 pt-3">
-                                      <div className="text-purple-300 font-semibold text-xs mb-2">Slang Breakdown:</div>
-                                      {hasExplanation.slangBreakdown.map((slang, idx) => (
-                                        <div key={idx} className="bg-black/20 rounded p-2">
-                                          <div className="text-yellow-300 font-bold text-xs">{slang.term}</div>
-                                          <div className="text-white/80 text-xs mt-1">{slang.definition}</div>
-                                          <div className="text-gray-400 italic text-xs mt-1">"{slang.usage}"</div>
-                                        </div>
-                                      ))}
+                              {hasExplanation.slangBreakdown && hasExplanation.slangBreakdown.length > 0 && (
+                                <div className="space-y-2 border-t border-blue-500/20 pt-3">
+                                  <div className="text-purple-300 font-semibold text-xs mb-2">Slang Breakdown:</div>
+                                  {hasExplanation.slangBreakdown.map((slang, idx) => (
+                                    <div key={idx} className="bg-black/20 rounded p-2">
+                                      <div className="text-yellow-300 font-bold text-xs">{slang.term}</div>
+                                      <div className="text-white/80 text-xs mt-1">{slang.definition}</div>
+                                      <div className="text-gray-400 italic text-xs mt-1">"{slang.usage}"</div>
                                     </div>
-                                  )}
+                                  ))}
                                 </div>
                               )}
                             </div>
-                          );
-                        })}
+                          )}
+                        </div>
+                      );
+                    })}
 
                         {hoveredWord && (
                           <div
@@ -1471,9 +1471,11 @@ const handleNavigateToVideo = (videoId) => {
                             </div>
                             {c.aiResponses.map((response, idx) => (
                               <div key={idx} className="flex gap-3 ml-11">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-xs">
-                                  AI
-                                </div>
+                                <img 
+                                    src={`/avatars/ai-${(idx % 5) + 1}.png`}
+                                    className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
+                                    alt="AI" 
+                                  />
                                 <div className="flex-1">
                                   <div className="text-white font-semibold text-sm">
                                     {response.authorName || 'AI Coach'}
