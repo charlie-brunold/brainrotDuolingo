@@ -766,6 +766,40 @@ RULES:
             fixed_items.append(f'"{fixed_item}"')
         return ', '.join(fixed_items) if fixed_items else array_content
 
+    def text_to_speech(
+        self,
+        text: str,
+        voice: str = "Atlas-PlayAI",
+        audio_format: str = "mp3"
+    ) -> bytes:
+        """
+        Convert text to speech using Groq's TTS API.
+
+        Args:
+            text: Text to convert to speech
+            voice: Voice model to use (default: Atlas-PlayAI)
+            audio_format: Audio format (default: mp3)
+
+        Returns:
+            Audio bytes
+        """
+        try:
+            # Groq TTS API call
+            response = self.client.audio.speech.create(
+                model="playai-tts",
+                voice=voice,
+                input=text,
+                response_format=audio_format
+            )
+
+            # Read the audio content
+            audio_bytes = response.read()
+            return audio_bytes
+
+        except Exception as e:
+            print(f"Error in text_to_speech: {e}")
+            raise Exception(f"TTS generation failed: {str(e)}")
+
     def _parse_json_response(self, response_text: str) -> Dict:
         """Parse JSON with error handling."""
         cleaned_text = self._strip_markdown(response_text)
@@ -774,7 +808,7 @@ RULES:
             return json.loads(cleaned_text)
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {e}")
-            
+
             try:
                 import re
                 fixed_text = re.sub(
