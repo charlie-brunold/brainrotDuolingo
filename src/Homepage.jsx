@@ -113,7 +113,7 @@ export default function HomePage({ onStartFetching }) {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Sparkles className="w-10 h-10 text-purple-500" />
+           <img src="/icon.png" alt="Logo" className="w-12 h-12 rounded-xl shadow-lg" />
             <h1 className="text-4xl font-bold text-white">Brain Thought</h1>
           </div>
           <p className="text-gray-400">
