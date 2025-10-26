@@ -29,3 +29,8 @@ build/
 __pycache__/
 *.pyc
 *.pyo
+
+# Database files (generated at runtime)
+*.db
+*.sqlite
+*.sqlite3
