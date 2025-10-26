@@ -592,7 +592,7 @@ const handleAlreadyKnow = (term) => {
         aiResponses: aiResponses
       };
 
-      setUserComments(prev => [newComment, ...prev]);
+      setUserComments(prev => [...prev,newComment]);
 
       setFeedback({
         score: evaluation.score,
@@ -1047,9 +1047,11 @@ const handleAlreadyKnow = (term) => {
                             </div>
                             {c.aiResponses.map((response, idx) => (
                               <div key={idx} className="flex gap-3 ml-11">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-xs">
-                                  AI
-                                </div>
+                                <img 
+                                    src={`/avatars/ai-${(idx % 5) + 1}.png`}
+                                    className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
+                                    alt="AI" 
+                                  />
                                 <div className="flex-1">
                                   <div className="text-white font-semibold text-sm">
                                     {response.authorName || 'AI Coach'}
