@@ -42,9 +42,7 @@ class GroqCommentEvaluator:
         video_description: str,
         user_comment: str,
         target_language: str,
-        video_like_count: int,
-        available_slang: List[str] = None,
-        forbidden_slang: List[str] = None
+        video_like_count: int
     ) -> Dict:
         """
         Evaluate a user's comment with detailed scoring and feedback.
@@ -55,31 +53,16 @@ class GroqCommentEvaluator:
             user_comment: The user's comment to evaluate
             target_language: Language being learned (e.g., "English", "Spanish")
             video_like_count: Number of likes on the video (for like calculation)
-            available_slang: List of slang terms available in the video
-            forbidden_slang: List of slang from example comments (user shouldn't copy these)
 
         Returns:
             Dictionary with score, likes, feedback, and detailed breakdown
         """
-        # Detect which slang terms user attempted to use
-        if available_slang is None:
-            available_slang = []
-        if forbidden_slang is None:
-            forbidden_slang = []
-
-        detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
-
-        # Classify slang into allowed vs forbidden
-        detected_forbidden = self._detect_slang_in_comment(user_comment, forbidden_slang)
-        allowed_slang_used = [s for s in detected_slang if s not in detected_forbidden]
-
-        # Construct evaluation prompt with slang focus
+        # Construct evaluation prompt focusing on language fundamentals
         prompt = self._build_evaluation_prompt(
             video_title,
             video_description,
             user_comment,
-            target_language,
-
+            target_language
         )
 
         try:
@@ -278,89 +261,58 @@ class GroqCommentEvaluator:
         video_title: str,
         video_description: str,
         user_comment: str,
-        target_language: str,
-        available_slang: List[str] = None,
-        allowed_slang_used: List[str] = None,
-        forbidden_slang: List[str] = None,
-        detected_forbidden: List[str] = None
+        target_language: str
     ) -> str:
-        """Build the evaluation prompt with focus on cultural adaptation and communication effectiveness."""
+        """Build the evaluation prompt focusing on language learning fundamentals."""
 
-        if available_slang is None:
-            available_slang = []
-        if allowed_slang_used is None:
-            allowed_slang_used = []
-        if forbidden_slang is None:
-            forbidden_slang = []
-        if detected_forbidden is None:
-            detected_forbidden = []
-
-        # Build slang context section
-        slang_context = ""
-        if available_slang:
-            slang_list = ", ".join(available_slang)
-            slang_context = f"\n[Cultural Context]\nCommon expressions in this video: {slang_list}\n"
-
-            if detected_slang:
-                detected_list = ", ".join(detected_slang)
-                slang_context += f"User incorporated: {detected_list}\n"
-
-        # Unified evaluation criteria focusing on overall communication
+        # Evaluation criteria focusing on language fundamentals
         evaluation_criteria = """[Evaluation Criteria]
-Score 0-100 based on how naturally the user communicates on social media:
+Score 0-100 based on how naturally and effectively the user communicates in {target_language}:
 
-1. CONTEXT RELEVANCE (30% weight) - Does it relate to the video?
+1. GRAMMAR & LANGUAGE ACCURACY (40% weight) - Core language skills
+   - Correct verb tenses and conjugations
+   - Proper word order and sentence structure
+   - Accurate vocabulary usage
+   - Appropriate articles and prepositions
+   - Note: Minor typos are acceptable in casual contexts
+
+2. CONTEXT RELEVANCE (30% weight) - Does it relate to the video?
    - Shows they watched and understood the content
-   - Responds to something from the video
-   - Note: Even loose connections are fine - this is social media!
+   - Responds meaningfully to the video topic
+   - Comment makes sense given the video context
+   - Note: Loose connections are fine for social media!
 
-2. TONE & NATURALNESS (30% weight) - Does it sound like a real comment?
-   - Casual and conversational (formal is okay too, just different style)
-   - Natural phrasing for the platform
-   - Authentic expression
-   - IMPORTANT: Slang is NOT required! Natural language without slang is perfectly fine
+3. NATURALNESS & CLARITY (30% weight) - Does it sound natural?
+   - Natural phrasing for a social media comment
+   - Clear communication - readers can understand the message
+   - Appropriate tone for the platform (casual is good!)
+   - Authentic expression in the target language
 
-3. CLARITY (25% weight) - Can people understand it?
-   - Main idea comes through
-   - Makes sense to readers
-   - Word choices work
+SCORING GUIDANCE (be constructive!):
+- 90-100: Excellent language use - natural, clear, grammatically strong
+- 75-89: Very good - minor errors but communicates well
+- 60-74: Good effort - understandable with some grammatical issues
+- 40-59: Basic communication - message unclear or multiple errors
+- 0-39: Significant language barriers - hard to understand
 
-4. LANGUAGE ACCURACY (15% weight) - Basic communication
-   - Note: Perfect grammar NOT needed - this is social media!
-   - Only flag things that really confuse the message
-   - Typos and casual shortcuts are totally normal
-
-SCORING GUIDANCE (be generous!):
-- 85-100: Totally natural comment - fits right in (with or without slang)
-- 70-84: Good comment with personality
-- 50-69: Decent comment, maybe a bit awkward
-- 30-49: Understandable but feels off
-- 0-29: Hard to understand OR completely random/unrelated
-
-CRITICAL - ABOUT SLANG:
-- Do NOT penalize for lack of slang usage
-- Do NOT suggest adding slang unless it's really natural for that context
-- Many great comments use zero slang - that's totally fine!
-- Only mention slang if they used it incorrectly
-- Focus on natural communication, not slang usage
+FEEDBACK APPROACH:
+- Be encouraging and supportive - they're learning!
+- In "mistakes" array: provide 2-3 specific, actionable grammar tips
+- In "goodParts" array: highlight what they did well linguistically
+- Focus on helping them improve their language skills
+- Keep feedback constructive and friendly
 
 MODIFIERS:
-- Short comments (under 5 words): No penalty! Short comments are super common
-- Random comment with zero connection to video: Only then apply -20 penalty
-- BE LENIENT: This is social media, not an essay. Casual = good!
+- Short comments (under 5 words): Evaluate based on what's there
+- Completely off-topic: Note the disconnect but still evaluate language quality
+- Social media context: Casual tone is appropriate, but grammar still matters for learning"""
 
-IMPORTANT - KEEP FEEDBACK LIGHT:
-- In the "mistakes" array, frame everything as friendly tips
-- Maximum 2-3 tips - don't overwhelm them
-- If off-topic, casually mention what the video is about: ["btw this video is about cooking tips"]
-- Focus on helping them sound natural, not adding slang"""
-
-        return f"""You are a chill, friendly language coach helping someone learn to comment naturally on social media in {target_language}. You're here to help them fit in and communicate effectively. Natural language without slang is perfectly fine - don't push slang usage!
+        return f"""You are a supportive language learning coach helping someone improve their {target_language} skills through social media commenting. Focus on helping them communicate clearly and naturally while developing strong grammar fundamentals.
 
 [Video Context]
 Video Title: {video_title}
 Video Description: {video_description}
-{slang_context}
+
 [User's Comment]
 Comment: {user_comment}
 Target Language: {target_language}
@@ -374,26 +326,22 @@ Return ONLY valid JSON with no markdown formatting, no code blocks, no backticks
   "grammarScore": <0-100>,
   "contextScore": <0-100>,
   "naturalnessScore": <0-100>,
-  "correction": "<improved version that sounds more natural, or 'Looks good!' if already natural>",
-  "mistakes": ["<friendly tip 1>", "<friendly tip 2>"],
-  "goodParts": ["<positive observation 1>", "<positive observation 2>"]
+  "correction": "<grammatically corrected version, or 'Looks great!' if already correct>",
+  "mistakes": ["<grammar tip 1>", "<grammar tip 2>", "<grammar tip 3>"],
+  "goodParts": ["<positive language observation 1>", "<positive language observation 2>"]
 }}
 
 CRITICAL JSON RULES:
 1. Return ONLY the JSON object - no markdown, no code blocks, no backticks
-2. The "mistakes" field should contain FRIENDLY, CASUAL TIPS - not harsh corrections
-3. Think of it as chatting with a friend, not grading a test
-4. Keep tips light and encouraging - this is social media, not an exam
-5. DO NOT suggest adding slang unless it's truly natural for that context
-6. Natural comments without slang deserve high scores too!
-7. Each array item MUST be a properly quoted JSON string
-8. Inside array strings, avoid using quotes - instead of "word" should be "correction", write: word should be correction
-9. Example friendly tips format: ["could add more details about what you liked", "btw this video is about travel tips", "the phrasing could be more natural"]
-10. Example goodParts format: ["clear and easy to understand", "sounds natural", "good connection to the video"]
-11. All strings must be wrapped in double quotes per JSON spec
-12. Keep it chill - social media is casual, so feedback should be too
-13. MAXIMUM 2-3 tips total - don't overwhelm them with a long list
-14. Only mention slang if they used it incorrectly - don't push slang usage"""
+2. The "mistakes" field should contain specific, actionable GRAMMAR and LANGUAGE tips
+3. Be encouraging but honest about language errors - they're here to learn!
+4. Focus on fundamental language skills: grammar, vocabulary, sentence structure
+5. Each array item MUST be a properly quoted JSON string
+6. Inside array strings, avoid using quotes - instead of saying "word" should be "correction", write: word should be correction
+7. Example grammar tips format: ["use past tense learned instead of present learning", "helpful is spelled with one L at the end", "the phrase should be a lot as two words"]
+8. Example goodParts format: ["correct verb tense usage", "natural sentence structure", "appropriate vocabulary choice", "good context awareness"]
+9. All strings must be wrapped in double quotes per JSON spec
+10. Provide 2-3 specific tips maximum - focus on the most important improvements"""
 
 
     def _build_response_prompt(
@@ -647,8 +595,6 @@ Output ONLY the username with no explanation or punctuation."""
         correction: str,
         video_title: str,
         target_language: str,
-        available_slang: List[str] = None,
-        forbidden_slang: List[str] = None,
         num_responses: int = None
     ) -> List[Dict]:
         """
@@ -661,25 +607,11 @@ Output ONLY the username with no explanation or punctuation."""
             correction: The corrected version of the comment
             video_title: Title of the video
             target_language: Language being learned
-            available_slang: Slang terms available in the video
-            forbidden_slang: Slang from example comments (user shouldn't copy these)
             num_responses: Number of responses to generate (2-4, random if None)
 
         Returns:
             List of dictionaries with aiComment, authorName, and likes
         """
-        # Detect slang usage
-        if available_slang is None:
-            available_slang = []
-        if forbidden_slang is None:
-            forbidden_slang = []
-
-        detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
-
-        # Classify slang into allowed vs forbidden
-        detected_forbidden = self._detect_slang_in_comment(user_comment, forbidden_slang)
-        allowed_slang_used = [s for s in detected_slang if s not in detected_forbidden]
-
         # Calculate response count based on score if not specified
         if num_responses is None:
             num_responses = self.calculate_response_count(score)
@@ -701,10 +633,6 @@ Output ONLY the username with no explanation or punctuation."""
                     correction,
                     video_title,
                     target_language,
-                    available_slang,
-                    allowed_slang_used,
-                    forbidden_slang,
-                    detected_forbidden,
                     response_index=i
                 )
 
@@ -747,77 +675,59 @@ Output ONLY the username with no explanation or punctuation."""
         correction: str,
         video_title: str,
         target_language: str,
-        available_slang: List[str],
-        allowed_slang_used: List[str],
-        forbidden_slang: List[str],
-        detected_forbidden: List[str],
         response_index: int
     ) -> str:
-        """Build a natural response prompt with forbidden slang awareness."""
+        """Build a natural response prompt focusing on language learning."""
 
         mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
-
-        # Build slang context with forbidden slang awareness
-        slang_context = ""
-        if allowed_slang_used:
-            slang_context = f"\nThey used DIFFERENT slang (not from examples): {', '.join(allowed_slang_used)}"
-        elif detected_forbidden:
-            slang_context = f"\nThey copied slang from examples: {', '.join(detected_forbidden)} (not creative)"
-        elif forbidden_slang:
-            slang_context = f"\nThey didn't use any slang (examples had: {', '.join(forbidden_slang[:2])})"
 
         # Simple variation without personality engineering
         response_styles = [
         "React with minimal words - one or two words plus maybe an emoji.",
-        "Point out one specific thing that caught your attention, ignore everything else.",
-        "Ask a question instead of making a statement.",
-        "Focus only on whether it worked or not, skip the explanation.",
-        "React to their energy/vibe, not the technical mistakes.",
+        "Point out one specific grammar mistake, ignore everything else.",
+        "Ask a question about their language choice.",
+        "Focus only on whether the grammar worked or not, skip the explanation.",
+        "React to their effort and progress.",
         "Be deadpan - state what's wrong like it's obvious.",
         "Give props if deserved, but make it understated.",
-        "Use their own words back at them with correction.",
-        "If there's slang, only comment on that - nothing else matters.",
-        "Ignore any mistakes and just vibe with the content of what they said.",
+        "Use their own words back at them with the grammatical correction.",
+        "Focus on one specific word or phrase that needs work.",
+        "Ignore mistakes and just acknowledge their message.",
         "Be blunt about what's wrong but keep it light.",
         "React like you're genuinely surprised (positive or negative).",
         ]
-        
+
         style_hint = response_styles[response_index % len(response_styles)]
 
-        return f"""You're scrolling comments and you're fluent in {target_language}. You comment like a regular person, not a language teacher.
+        return f"""You're scrolling comments and you're fluent in {target_language}. You comment like a regular person who notices language mistakes.
 
 Post: "{video_title}"
 Their comment: "{user_comment}"
-Mistakes: {mistakes_text}
-Correction: {correction}{slang_context}
+Language mistakes: {mistakes_text}
+Correction: {correction}
 
 {style_hint}
 
-Examples of natural responses:
+Examples of natural responses focused on language:
 
 "*learned"
 "wait this is actually good"
-"bro 💀"
-"nah you cooked"
-"okay the slang hit different"
-"helpfull??"
-"'alot' is crazy but go off"
-"fr this is clean"
-"almost perfect but it's 'era' not 'estaba'"
-"you really said bussin unironically"
-"could've used some slang tbh"
+"helpful only has one L"
+"solid grammar here"
+"'alot' is two words but nice try"
 "this works"
-"my guy forgot how to spell"
-"okay okay I see you"
-"'I learning' - bro"
-"fire comment ngl"
-"that's not how you use that slang lol"
-"respect for using different slang"
-"wait you actually used new slang?"
-"caught you copying the examples 💀"
-"bro just copied what others said"
-"at least try some different slang"
-"okay I see you getting creative with it"
+"forgot how to spell there"
+"okay okay not bad"
+"'I learning' → 'I learned'"
+"almost perfect grammar"
+"should be past tense"
+"nice sentence structure"
+"that verb tense tho"
+"your vocabulary is improving"
+"good use of that word"
+"close! it's 'went' not 'goed'"
+"the grammar here is clean"
+"this phrasing is awkward"
 
 Just write the comment (1-2 sentences max). Nothing else."""
 

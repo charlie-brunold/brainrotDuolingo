@@ -39,8 +39,7 @@ class EvaluateRequest(BaseModel):
     videoDescription: str
     userComment: str
     targetLanguage: str
-    videoLikeCount: int
-    availableSlang: List[str] = [] 
+    videoLikeCount: int 
 
 class EvaluateResponse(BaseModel):
     score: int
@@ -59,7 +58,6 @@ class RespondRequest(BaseModel):
     correction: str
     videoTitle: str
     targetLanguage: str
-    availableSlang: List[str] = []
 
 class AIResponse(BaseModel):
     aiComment: str
@@ -496,9 +494,7 @@ def evaluate_comment(request: EvaluateRequest):
             video_description=request.videoDescription,
             user_comment=request.userComment,
             target_language=request.targetLanguage,
-            video_like_count=request.videoLikeCount,
-            available_slang=request.availableSlang,
-            forbidden_slang=request.forbiddenSlang
+            video_like_count=request.videoLikeCount
         )
         return evaluation
     except Exception as e:
@@ -514,9 +510,7 @@ def generate_ai_response(request: RespondRequest):
             mistakes=request.mistakes,
             correction=request.correction,
             video_title=request.videoTitle,
-            target_language=request.targetLanguage,
-            available_slang=request.availableSlang,
-            forbidden_slang=request.forbiddenSlang
+            target_language=request.targetLanguage
         )
         return {"responses": responses}
     except Exception as e:

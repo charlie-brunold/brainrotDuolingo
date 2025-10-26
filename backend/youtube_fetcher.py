@@ -214,10 +214,13 @@ class YouTubeShortsSlangFetcher:
 
         return results
 
-    def fetch_shorts(self, topics: List[str], shorts_per_topic: int = 15) -> List[Dict]: # Removed comments_per_short default here
+    def fetch_shorts(self, topics: List[str], shorts_per_topic: int = 15, comments_per_short: int = 20) -> List[Dict]:
         """
         Main function: Fetch shorts, get their top 5-10 comments.
         Implements Hybrid Fetching and returns ALL suitable videos.
+
+        Note: comments_per_short parameter is kept for backward compatibility but not used,
+        as comments are fetched with a random count (10-20) internally.
         """
         final_shorts_data = []
         processed_video_ids = set()

@@ -233,8 +233,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           userComment: commentText,
           targetLanguage: 'English', // TODO: Make this configurable
           videoLikeCount: currentVideo.like_count || 0,
-          availableSlang: currentVideo.unique_slang_terms || [],
-          forbiddenSlang: currentVideo.unique_slang_terms || [], // Slang from example comments
         }),
       });
 
@@ -264,8 +262,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           correction: evaluation.correction || '',
           videoTitle: currentVideo.title || 'Untitled Video',
           targetLanguage: 'English', // TODO: Make this configurable
-          availableSlang: currentVideo.unique_slang_terms || [],
-          forbiddenSlang: currentVideo.unique_slang_terms || [], // Slang from example comments
         }),
       });
 
