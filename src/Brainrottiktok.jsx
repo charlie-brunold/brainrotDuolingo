@@ -326,7 +326,9 @@ export default function BrainrotTikTok({ shortsData }) {
           example: slang.usage,
           learnedAt: Date.now(),
           videoTitle: currentVideo.title,
-          videoId: currentVideo.video_id
+          videoId: currentVideo.video_id,
+          videoThumbnail: currentVideo.thumbnail,
+          videoUrl: currentVideo.url
         }));
 
         setMySlang(prev => {
@@ -564,7 +566,9 @@ const handleWantToLearn = (term, definition, example) => {
     example: example,
     learnedAt: Date.now(),
     videoTitle: currentVideo.title,
-    videoId: currentVideo.video_id
+    videoId: currentVideo.video_id,
+    videoThumbnail: currentVideo.thumbnail,
+    videoUrl: currentVideo.url
   };
 
   setMySlang(prev => {
@@ -603,6 +607,21 @@ const handleAlreadyKnow = (term) => {
   }
 };
 
+const handleNavigateToVideo = (videoId) => {
+  // Switch to For You page
+  setShowMySlang(false);
+
+  // Find the video index by videoId
+  const videoIndex = VIDEOS.findIndex(video => video.video_id === videoId);
+
+  if (videoIndex !== -1) {
+    // Navigate to the video
+    setCurrentVideoIndex(videoIndex);
+  } else {
+    console.warn(`Video with ID ${videoId} not found in current feed`);
+  }
+};
+
   useEffect(() => {
     if (showMySlang && mySlang.length > 0) {
       fetchSuggestions();
@@ -627,7 +646,7 @@ const handleAlreadyKnow = (term) => {
         aiResponses: aiResponses
       };
 
-      setUserComments(prev => [newComment, ...prev]);
+      setUserComments(prev => [...prev,newComment]);
 
       // Find this section in handleSubmitComment:
       setFeedback({
@@ -866,6 +885,9 @@ const handleAlreadyKnow = (term) => {
 
   // Initialize YouTube Player when video changes
   useEffect(() => {
+    // Only initialize player when on "For You" page
+    if (showMySlang) return;
+
     if (!youtubeAPIReady || !videoId) return;
 
     // Wait if a player is currently being destroyed
@@ -980,7 +1002,7 @@ const handleAlreadyKnow = (term) => {
         }
       }
     };
-  }, [youtubeAPIReady, videoId]);
+  }, [youtubeAPIReady, videoId, showMySlang]);
 
   // Clean up translation state when video changes
   useEffect(() => {
@@ -1536,9 +1558,11 @@ const handleAlreadyKnow = (term) => {
                             </div>
                             {c.aiResponses.map((response, idx) => (
                               <div key={idx} className="flex gap-3 ml-11">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-xs">
-                                  AI
-                                </div>
+                                <img 
+                                    src={`/avatars/ai-${(idx % 5) + 1}.png`}
+                                    className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
+                                    alt="AI" 
+                                  />
                                 <div className="flex-1">
                                   <div className="text-white font-semibold text-sm">
                                     {response.authorName || 'AI Coach'}
@@ -1602,6 +1626,7 @@ const handleAlreadyKnow = (term) => {
             setKnownWords={setKnownWords}
             suggestions={suggestions}
             loadingSuggestions={loadingSuggestions}
+            onNavigateToVideo={handleNavigateToVideo}
           />
         )}
       </div>

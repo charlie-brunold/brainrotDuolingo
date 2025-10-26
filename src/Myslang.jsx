@@ -7,7 +7,8 @@ export default function MySlang({
   knownWords,
   setKnownWords,
   suggestions,
-  loadingSuggestions
+  loadingSuggestions,
+  onNavigateToVideo
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -269,8 +270,26 @@ export default function MySlang({
                                 <p className="text-white/60 text-xs italic">"{word.example}"</p>
                               </div>
                             )}
-                            {word.videoTitle && (
-                              <div className="flex items-center gap-2 text-white/40 text-xs">
+                            {word.videoTitle && word.videoThumbnail && (
+                              <button
+                                onClick={() => onNavigateToVideo?.(word.videoId)}
+                                className="flex items-center gap-2 mt-2 hover:bg-white/5 rounded-lg p-2 transition-colors w-full text-left group"
+                              >
+                                <img
+                                  src={word.videoThumbnail}
+                                  alt={word.videoTitle}
+                                  className="w-16 h-12 object-cover rounded border border-white/10 group-hover:border-white/30 transition-colors flex-shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white/60 text-xs group-hover:text-white/80 transition-colors truncate">
+                                    {word.videoTitle}
+                                  </p>
+                                  <p className="text-white/40 text-xs mt-0.5">Click to view video</p>
+                                </div>
+                              </button>
+                            )}
+                            {word.videoTitle && !word.videoThumbnail && (
+                              <div className="flex items-center gap-2 text-white/40 text-xs mt-2">
                                 <span>From: {word.videoTitle?.substring(0, 30)}{word.videoTitle?.length > 30 ? '...' : ''}</span>
                               </div>
                             )}
@@ -370,8 +389,26 @@ export default function MySlang({
                           <p className="text-white/60 text-xs italic">"{slang.example}"</p>
                         </div>
                       )}
-                      {slang.videoTitle && (
-                        <div className="flex items-center gap-2 text-white/40 text-xs">
+                      {slang.videoTitle && slang.videoThumbnail && (
+                        <button
+                          onClick={() => onNavigateToVideo?.(slang.videoId)}
+                          className="flex items-center gap-2 mt-2 hover:bg-white/5 rounded-lg p-2 transition-colors w-full text-left group"
+                        >
+                          <img
+                            src={slang.videoThumbnail}
+                            alt={slang.videoTitle}
+                            className="w-16 h-12 object-cover rounded border border-white/10 group-hover:border-white/30 transition-colors flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white/60 text-xs group-hover:text-white/80 transition-colors truncate">
+                              {slang.videoTitle}
+                            </p>
+                            <p className="text-white/40 text-xs mt-0.5">Click to view video</p>
+                          </div>
+                        </button>
+                      )}
+                      {slang.videoTitle && !slang.videoThumbnail && (
+                        <div className="flex items-center gap-2 text-white/40 text-xs mt-2">
                           <span>From: {slang.videoTitle?.substring(0, 30)}{slang.videoTitle?.length > 30 ? '...' : ''}</span>
                         </div>
                       )}
