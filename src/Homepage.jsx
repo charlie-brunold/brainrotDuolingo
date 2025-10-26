@@ -44,11 +44,16 @@ export default function HomePage({ onStartFetching }) {
 
   // Toggle topic selection
   const toggleTopic = (topic) => {
-    const topicLower = topic.toLowerCase();
-    if (selectedTopics.includes(topicLower)) {
-      setSelectedTopics(selectedTopics.filter(t => t !== topicLower));
+    const lowerTopic = topic.toLowerCase();
+    if (selectedTopics.includes(lowerTopic)) {
+      // Remove topic if already selected
+      setSelectedTopics(selectedTopics.filter(t => t !== lowerTopic));
+    } else if (selectedTopics.length < 3) {
+      // Add topic only if less than 3 are selected
+      setSelectedTopics([...selectedTopics, lowerTopic]);
     } else {
-      setSelectedTopics([...selectedTopics, topicLower]);
+      // Optionally, show a toast or alert
+      alert("You can only select up to 3 topics!");
     }
   };
 
@@ -94,10 +99,10 @@ export default function HomePage({ onStartFetching }) {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Sparkles className="w-10 h-10 text-purple-500" />
-            <h1 className="text-4xl font-bold text-white">Brainrot TikTok</h1>
+            <h1 className="text-4xl font-bold text-white">BrainThought</h1>
           </div>
           <p className="text-gray-400">
-            Select your interests to customize your experience
+            Select your interests to customize your language learnng experience!
           </p>
         </div>
 
@@ -107,7 +112,7 @@ export default function HomePage({ onStartFetching }) {
           {/* Topics Section */}
           <div>
             <h2 className="text-white text-xl font-bold mb-4">
-              Select Your Interests
+              Select Your Interests (Up to 3)
             </h2>
             
             {/* Predefined Topic Bubbles */}
@@ -206,7 +211,7 @@ export default function HomePage({ onStartFetching }) {
 
         {/* Footer Info */}
         <div className="mt-6 text-center text-gray-500 text-sm">
-          <p>Videos will be fetched from YouTube with relevant comments</p>
+          <p>Relevant videos will be fetched from YouTube.</p>
         </div>
 
       </div>

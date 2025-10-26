@@ -98,7 +98,7 @@ if (userConfig && !shortsData) {
           Fetching Videos...
         </h2>
         <p className="text-gray-400 text-sm mb-6">
-          Loading {userConfig.topics.join(', ')} videos with slang comments
+          Loading {userConfig.topics.join(', ')} videos...
         </p>
         
         {/* Progress dots animation */}
