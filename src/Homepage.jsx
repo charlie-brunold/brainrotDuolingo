@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Plus, X, ArrowRight } from 'lucide-react';
 
 export default function HomePage({ onStartFetching }) {
@@ -15,8 +15,23 @@ export default function HomePage({ onStartFetching }) {
       document.body.style.fontFamily = '';
     };
   }, []);
+
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [customTopic, setCustomTopic] = useState('');
+  const [typedText, setTypedText] = useState('');
+  
+  const fullText = "Select your interests to customize your language learning experience!";
+
+  // Typing animation effect
+  useEffect(() => {
+    if (typedText.length < fullText.length) {
+      const timeout = setTimeout(() => {
+        setTypedText(fullText.slice(0, typedText.length + 1));
+      }, 50); // Adjust speed here (lower = faster)
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [typedText]);
 
   // Predefined topic bubbles
   const predefinedTopics = [
@@ -99,10 +114,11 @@ export default function HomePage({ onStartFetching }) {
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Sparkles className="w-10 h-10 text-purple-500" />
-            <h1 className="text-4xl font-bold text-white">BrainThought</h1>
+            <h1 className="text-4xl font-bold text-white">Brain Thought</h1>
           </div>
-          <p className="text-gray-400">
-            Select your interests to customize your language learnng experience!
+          <p className="text-gray-400 text-xl font-medium">
+            {typedText}
+            <span className="animate-pulse">|</span>
           </p>
         </div>
 
@@ -111,7 +127,7 @@ export default function HomePage({ onStartFetching }) {
           
           {/* Topics Section */}
           <div>
-            <h2 className="text-white text-xl font-bold mb-4">
+            <h2 className="text-white text-xl font-medium mb-4">
               Select Your Interests (Up to 3)
             </h2>
             
