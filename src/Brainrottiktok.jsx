@@ -520,8 +520,7 @@ export default function BrainrotTikTok({ shortsData }) {
                   </div>
                 );
               })}
-            </div>
-
+            </div>   
             {/* Overlay UI for current video */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="h-full w-full relative pointer-events-auto"
@@ -651,7 +650,7 @@ export default function BrainrotTikTok({ shortsData }) {
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 
                 {/* Real YouTube Comments - Show First (3-4 comments) */}
-                {currentVideo.comments_with_slang && currentVideo.comments_with_slang.slice(0, 4).map((c, idx) => {
+                {currentVideo.top_comments && currentVideo.top_comments.slice(0, 4).map((c, idx) => {
                   const commentId = c.comment_id;
                   const isExplaining = activeExplanation === commentId;
                   const isLoading = loadingExplanation === commentId;
