@@ -801,11 +801,7 @@ const handleAlreadyKnow = (term) => {
                           className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
                           onClick={() => setShowComments(false)}
                         ></div>
-<<<<<<< Updated upstream
-                        
-=======
-                        <h3 className="text-white font-bold text-lg">Top Comments</h3>
->>>>>>> Stashed changes
+                        <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.slang_comment_count || 0)} Comments with Slang</h3>
                       </div>
 
                       {showFeedback && feedback && (
@@ -868,8 +864,8 @@ const handleAlreadyKnow = (term) => {
                                         return <span key={i}>{token.text}</span>;
                                       }
 
-                                      // Only make words hoverable if explanation is actively open
-                                      if (!isExplanationActive) {
+                                      // Only make words hoverable if explanation has been loaded
+                                      if (!hasExplanation) {
                                         return <span key={i}>{token.text}</span>;
                                       }
 
