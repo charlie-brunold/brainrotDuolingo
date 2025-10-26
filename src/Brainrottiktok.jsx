@@ -710,15 +710,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           <div className="text-white">
             <div className="font-bold">@{currentVideo.channel}</div>
             <div className="text-sm mt-1">{currentVideo.title}</div>
-            {currentVideo.unique_slang_terms && currentVideo.unique_slang_terms.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {currentVideo.unique_slang_terms.map((slang, idx) => (
-                  <span key={idx} className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                    #{slang}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -758,31 +749,9 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                   className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
                   onClick={() => setShowComments(false)}
                 ></div>
-                <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.slang_comment_count || 0)} Comments with Slang</h3>
+                <h3 className="text-white font-bold text-lg">{formatNumber} Top Comments</h3>
               </div>
 
-              {/* Practice Prompt */}
-              <div className="p-4 bg-gradient-to-r from-purple-600 to-pink-600">
-                <div className="flex items-start gap-2">
-                  <Sparkles className="w-5 h-5 text-white flex-shrink-0 mt-1" />
-                  <div>
-                    <div className="text-white font-semibold mb-1">Use NEW slang (not from examples!)</div>
-                    <div className="text-white/90 text-sm">Try different slang than what's in the comments</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="text-white/80 text-xs">Suggested:</span>
-                      {suggestedSlang.map(slang => (
-                        <button
-                          key={slang}
-                          onClick={() => addSlangToComment(slang)}
-                          className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs text-white hover:bg-white/30"
-                        >
-                          {slang}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
 
               {/* Feedback */}
               {showFeedback && feedback && (
@@ -866,11 +835,23 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                 ))}
                 
                 {/* Show real comments from the video */}
-                {currentVideo.comments_with_slang && currentVideo.comments_with_slang.slice(0, 5).map((c, idx) => {
-                  const commentId = c.comment_id;
-                  const isExplaining = activeExplanation === commentId;
-                  const isLoading = loadingExplanation === commentId;
-                  const explanation = explanations[commentId];
+                {(currentVideo.comments_with_slang || [])
+                  .filter(c => {
+                    const text = c.text || '';
+                    if (!text.trim()) return false;
+                
+                    // Detect language (returns ISO 639-3 code, 'eng' for English)
+                    const lang = franc(text, { minLength: 3 });
+                
+                    // Keep if English or uncertain ('und')
+                    return lang === 'eng' || lang === 'und' || text.length < 15;
+                  })
+                  .slice(0, 5)
+                  .map(c => {
+                    const commentId = c.comment_id;
+                    const isExplaining = activeExplanation === commentId;
+                    const isLoading = loadingExplanation === commentId;
+                    const explanation = explanations[commentId];
 
                   return (
                     <div key={commentId} className="relative">
@@ -904,13 +885,9 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                                 <X className="w-3 h-3 text-gray-400" />
                               </button>
 
-                              <div className="text-white/90 text-xs mb-2">
-                                <span className="font-semibold text-blue-400">Translation:</span> {explanation.translation}
-                              </div>
-
                               {explanation.slangBreakdown && explanation.slangBreakdown.length > 0 && (
                                 <div className="text-white/80 text-xs">
-                                  <div className="font-semibold text-purple-400 mb-1">Slang Breakdown:</div>
+                                  <div className="font-semibold text-purple-400 mb-1">Sentence Breakdown:</div>
                                   {explanation.slangBreakdown.map((item, i) => (
                                     <div key={i} className="ml-2 mb-1">
                                       <span className="text-yellow-300 font-semibold">{item.term}:</span> {item.definition}
@@ -926,9 +903,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                             <button className="text-gray-400 text-xs flex items-center gap-1">
                               <Heart className="w-3 h-3" /> {c.like_count}
                             </button>
-                            <span className="text-purple-400 text-xs">
-                              {c.detected_slang.join(', ')}
-                            </span>
+                            
                           </div>
                         </div>
                       </div>

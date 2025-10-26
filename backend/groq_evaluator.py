@@ -79,10 +79,7 @@ class GroqCommentEvaluator:
             video_description,
             user_comment,
             target_language,
-            available_slang,
-            allowed_slang_used,
-            forbidden_slang,
-            detected_forbidden
+
         )
 
         try:
@@ -112,14 +109,14 @@ class GroqCommentEvaluator:
             print(f"Error in evaluate_comment: {e}")
             # Return fallback response
             return {
-                "score": 0,
-                "grammarScore": 0,
-                "contextScore": 0,
-                "naturalnessScore": 0,
-                "likes": 0,
-                "correction": "Error processing comment",
-                "mistakes": [f"System error: {str(e)}"],
-                "goodParts": []
+                "score": 50,
+                "grammarScore": 50,
+                "contextScore": 50,
+                "naturalnessScore": 50,
+                "likes": 100,
+                "correction": "Keep practicing!",
+                "mistakes": ["Oops, had trouble processing that - try again!"],
+                "goodParts": ["You're making an effort!"]
             }
 
     def generate_response(
@@ -132,12 +129,12 @@ class GroqCommentEvaluator:
         target_language: str
     ) -> Dict:
         """
-        Generate a Gen Z style AI response with roast-with-love personality.
+        Generate a warm, encouraging AI response with teacher personality.
 
         Args:
             user_comment: The user's original comment
             score: The evaluation score (0-100)
-            mistakes: List of identified mistakes
+            mistakes: List of suggestions for improvement (kept as 'mistakes' for compatibility)
             correction: The corrected version of the comment
             video_title: Title of the video
             target_language: Language being learned
@@ -287,7 +284,7 @@ class GroqCommentEvaluator:
         forbidden_slang: List[str] = None,
         detected_forbidden: List[str] = None
     ) -> str:
-        """Build the evaluation prompt with forbidden slang logic."""
+        """Build the evaluation prompt with focus on cultural adaptation and communication effectiveness."""
 
         if available_slang is None:
             available_slang = []
@@ -300,69 +297,71 @@ class GroqCommentEvaluator:
 
         # Build slang context section
         slang_context = ""
-        if forbidden_slang:
-            forbidden_list = ", ".join(forbidden_slang)
-            slang_context = f"\n[Slang Context]\nForbidden slang (from example comments): {forbidden_list}\n"
+        if available_slang:
+            slang_list = ", ".join(available_slang)
+            slang_context = f"\n[Cultural Context]\nCommon expressions in this video: {slang_list}\n"
 
-            if allowed_slang_used:
-                allowed_list = ", ".join(allowed_slang_used)
-                slang_context += f"User successfully used DIFFERENT slang: {allowed_list}\n"
-            elif detected_forbidden:
-                detected_list = ", ".join(detected_forbidden)
-                slang_context += f"User only used forbidden slang: {detected_list} (treat as no slang used)\n"
-            else:
-                slang_context += "User did not use any slang.\n"
+            if detected_slang:
+                detected_list = ", ".join(detected_slang)
+                slang_context += f"User incorporated: {detected_list}\n"
 
-        # Adjust evaluation criteria based on slang usage
-        if allowed_slang_used:
-            evaluation_criteria = """[Evaluation Criteria]
-Score 0-100 based on:
-1. SLANG USAGE CORRECTNESS (70% weight) - PRIMARY FOCUS
-   - Is the slang term used in the correct context?
-   - Does it follow proper idiomatic usage?
-   - Is it grammatically integrated correctly?
-2. General grammar/accuracy (20% weight) - Supporting language quality
-3. Relevance to video (10% weight) - Context appropriateness
+        # Unified evaluation criteria focusing on overall communication
+        evaluation_criteria = """[Evaluation Criteria]
+Score 0-100 based on how naturally the user communicates on social media:
 
-IMPORTANT: Focus heavily on whether the slang is used correctly. Wrong slang usage should significantly lower the score.
+1. CONTEXT RELEVANCE (30% weight) - Does it relate to the video?
+   - Shows they watched and understood the content
+   - Responds to something from the video
+   - Note: Even loose connections are fine - this is social media!
 
-MODIFIERS:
-- Comment is less than 5 words: Apply -10 penalty to final score"""
-        elif forbidden_slang:
-            evaluation_criteria = """[Evaluation Criteria]
-CRITICAL: User was required to use DIFFERENT slang than example comments, but either:
-- Used only forbidden slang (copied from examples), OR
-- Used no slang at all
+2. TONE & NATURALNESS (30% weight) - Does it sound like a real comment?
+   - Casual and conversational (formal is okay too, just different style)
+   - Natural phrasing for the platform
+   - Authentic expression
+   - IMPORTANT: Slang is NOT required! Natural language without slang is perfectly fine
 
-MAXIMUM POSSIBLE SCORE IS 50/100 (neutral outcome - neither helped nor harmed).
+3. CLARITY (25% weight) - Can people understand it?
+   - Main idea comes through
+   - Makes sense to readers
+   - Word choices work
 
-Score 0-50 based on:
-1. Grammar/accuracy (40% weight) - Language correctness
-2. Relevance to video (30% weight) - Context appropriateness
-3. Vocabulary/naturalness (30% weight) - General expression
+4. LANGUAGE ACCURACY (15% weight) - Basic communication
+   - Note: Perfect grammar NOT needed - this is social media!
+   - Only flag things that really confuse the message
+   - Typos and casual shortcuts are totally normal
 
-HARD CAP: Because they didn't use any NEW slang (different from examples), the score CANNOT exceed 50/100 under any circumstances.
+SCORING GUIDANCE (be generous!):
+- 85-100: Totally natural comment - fits right in (with or without slang)
+- 70-84: Good comment with personality
+- 50-69: Decent comment, maybe a bit awkward
+- 30-49: Understandable but feels off
+- 0-29: Hard to understand OR completely random/unrelated
 
-MODIFIERS:
-- Comment is less than 5 words: Apply -10 penalty to final score
-- Mention in goodParts that they need to use different slang than the examples to score higher"""
-        else:
-            evaluation_criteria = """[Evaluation Criteria]
-Score 0-100 based on:
-1. Grammar/accuracy (50% weight) - Most important for language learning
-2. Relevance to video (30% weight) - Ensures comprehension
-3. Vocabulary/naturalness (20% weight) - Rewards idiomatic usage
+CRITICAL - ABOUT SLANG:
+- Do NOT penalize for lack of slang usage
+- Do NOT suggest adding slang unless it's really natural for that context
+- Many great comments use zero slang - that's totally fine!
+- Only mention slang if they used it incorrectly
+- Focus on natural communication, not slang usage
 
 MODIFIERS:
-- Comment is less than 5 words: Apply -10 penalty to final score"""
+- Short comments (under 5 words): No penalty! Short comments are super common
+- Random comment with zero connection to video: Only then apply -20 penalty
+- BE LENIENT: This is social media, not an essay. Casual = good!
 
-        return f"""You are a language learning evaluator specializing in slang and idiomatic expressions. Analyze this user's comment.
+IMPORTANT - KEEP FEEDBACK LIGHT:
+- In the "mistakes" array, frame everything as friendly tips
+- Maximum 2-3 tips - don't overwhelm them
+- If off-topic, casually mention what the video is about: ["btw this video is about cooking tips"]
+- Focus on helping them sound natural, not adding slang"""
+
+        return f"""You are a chill, friendly language coach helping someone learn to comment naturally on social media in {target_language}. You're here to help them fit in and communicate effectively. Natural language without slang is perfectly fine - don't push slang usage!
 
 [Video Context]
 Video Title: {video_title}
 Video Description: {video_description}
 {slang_context}
-[User Input]
+[User's Comment]
 Comment: {user_comment}
 Target Language: {target_language}
 
@@ -375,18 +374,27 @@ Return ONLY valid JSON with no markdown formatting, no code blocks, no backticks
   "grammarScore": <0-100>,
   "contextScore": <0-100>,
   "naturalnessScore": <0-100>,
-  "correction": "<corrected version or 'No correction needed'>",
-  "mistakes": ["<mistake 1>", "<mistake 2>"],
+  "correction": "<improved version that sounds more natural, or 'Looks good!' if already natural>",
+  "mistakes": ["<friendly tip 1>", "<friendly tip 2>"],
   "goodParts": ["<positive observation 1>", "<positive observation 2>"]
 }}
 
 CRITICAL JSON RULES:
 1. Return ONLY the JSON object - no markdown, no code blocks, no backticks
-2. Each array item MUST be a properly quoted JSON string
-3. Inside array strings, avoid using quotes - instead of "word" should be "correction", write: word should be correction
-4. Example mistakes format: ["fire used as verb instead of adjective", "learning should be learned"]
-5. All strings must be wrapped in double quotes per JSON spec
-6. If slang was attempted, focus mistakes/goodParts on slang usage correctness"""
+2. The "mistakes" field should contain FRIENDLY, CASUAL TIPS - not harsh corrections
+3. Think of it as chatting with a friend, not grading a test
+4. Keep tips light and encouraging - this is social media, not an exam
+5. DO NOT suggest adding slang unless it's truly natural for that context
+6. Natural comments without slang deserve high scores too!
+7. Each array item MUST be a properly quoted JSON string
+8. Inside array strings, avoid using quotes - instead of "word" should be "correction", write: word should be correction
+9. Example friendly tips format: ["could add more details about what you liked", "btw this video is about travel tips", "the phrasing could be more natural"]
+10. Example goodParts format: ["clear and easy to understand", "sounds natural", "good connection to the video"]
+11. All strings must be wrapped in double quotes per JSON spec
+12. Keep it chill - social media is casual, so feedback should be too
+13. MAXIMUM 2-3 tips total - don't overwhelm them with a long list
+14. Only mention slang if they used it incorrectly - don't push slang usage"""
+
 
     def _build_response_prompt(
         self,
@@ -397,42 +405,51 @@ CRITICAL JSON RULES:
         video_title: str,
         target_language: str
     ) -> str:
-        """Build the roast-with-love response prompt following design doc."""
-        mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
+        """Build the warm, encouraging teacher-style response prompt."""
+        suggestions_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
 
-        return f"""You're someone who's fluent in {target_language} and casually drops corrections in comment sections. You're helpful but never preachy - more like a friend pointing something out than a teacher grading homework.
+        return f"""You're a friendly language teacher commenting on social media. You sound like a normal person who happens to be good at teaching - approachable and helpful. Keep your language simple and natural, not overly trendy or Gen Z. DO NOT force slang into your responses!
 
-        Context:
-        - Post: "{video_title}"
-        - Their comment: "{user_comment}"
-        {mistakes_text}
-        {correction}
+Context:
+- Post: "{video_title}"
+- Their comment: "{user_comment}"
+- Suggestions for improvement: {suggestions_text}
+- Better version: {correction}
 
-        Write a SHORT comment (1-2 sentences max) responding to their comment. If there's a mistake, mention it naturally. If they nailed it, acknowledge that. Keep it real - you're just another person scrolling and commenting.
+Write a SHORT comment (1-2 sentences max) responding to their comment.
 
-        Response style examples:
+YOUR TONE:
+- Warm and encouraging, like a supportive friend
+- Natural and conversational - just a regular person helping out
+- Avoid heavy slang or Gen Z language (no "fr", "lowkey", "ngl", etc.)
+- Use complete words, minimal abbreviations
+- Make them feel good while offering gentle guidance
+- Frame any corrections as helpful suggestions, not mistakes
+- IMPORTANT: Don't use slang keywords unless they naturally fit - speak normally!
 
-        "*learned, but yeah same"
+RESPONSE STYLE EXAMPLES (NO FORCED SLANG):
 
-        "wait you actually got the subjunctive right??"
+"Nice work! Just a small note - it should be 'learned' instead of 'learning' here."
 
-        "'helpfull' is killing me but go off"
+"You're getting better at this! One thing: 'helpful' only has one L at the end."
 
-        "that's clean actually"
+"Good comment! For this context, 'era' would work better than 'estaba'."
 
-        "almost perfect but it's 'era' not 'estaba' for that one"
+"This sounds really natural - well done!"
 
-        "bro said 'alot' 💀"
+"Great job working that expression into your comment naturally!"
 
-        "okay this is lowkey impressive"
+"I can tell you're thinking about the grammar, which is awesome! Just remember 'a lot' is two words."
 
-        "nah that works"
+"This is really coming along - the structure is much more natural now."
 
-        "'I learning' - my guy it's 'I learned' lol"
+"Perfect tone for this kind of video - you nailed it!"
 
-        "you're getting better at this fr"
+"Almost perfect! Just change 'I learning' to 'I learned' and it's great."
 
-        Just respond with the comment. No explanation, no quotes around it."""
+"Really nice casual style here - keep practicing!"
+
+Just respond with the comment. No explanation, no quotes around it, no meta-commentary. Speak like a normal person, not someone trying to sound cool with slang."""
 
     def _parse_json_response(self, response_text: str) -> Dict:
         """
@@ -461,7 +478,7 @@ CRITICAL JSON RULES:
                 import re
                 # Fix patterns like ["text with "quote" in it"]
                 fixed_text = re.sub(
-                    r'("(?:mistakes|goodParts)":\s*\[)([^\]]+)(\])',
+                    r'("(?:mistakes|suggestions|goodParts)":\s*\[)([^\]]+)(\])',
                     lambda m: m.group(1) + self._fix_array_quotes(m.group(2)) + m.group(3),
                     cleaned_text
                 )
@@ -483,13 +500,13 @@ CRITICAL JSON RULES:
             print(f"Original response text:\n{cleaned_text}")
             # Return fallback structure
             return {
-                "score": 0,
-                "grammarScore": 0,
-                "contextScore": 0,
-                "naturalnessScore": 0,
-                "correction": "Error parsing response",
-                "mistakes": ["Could not parse AI response"],
-                "goodParts": []
+                "score": 50,
+                "grammarScore": 50,
+                "contextScore": 50,
+                "naturalnessScore": 50,
+                "correction": "Keep it up!",
+                "mistakes": ["Something went wrong - give it another shot!"],
+                "goodParts": ["Nice try!"]
             }
 
     def _fix_array_quotes(self, array_content: str) -> str:
@@ -1032,43 +1049,3 @@ CRITICAL JSON RULES:
 4. Keep reason to 1 sentence (e.g., "Often used with rizz in dating contexts")
 5. All strings must be wrapped in double quotes
 6. DO NOT suggest terms they've already learned"""
-
-    def text_to_speech(
-        self,
-        text: str,
-        voice: str = "Atlas-PlayAI",
-        audio_format: str = "mp3"
-    ) -> bytes:
-        """
-        Convert text to speech using Groq's PlayAI TTS model.
-
-        Args:
-            text: The text to convert to speech
-            voice: Voice to use (default: Atlas-PlayAI). Available English voices:
-                   Arista-PlayAI, Atlas-PlayAI, Basil-PlayAI, Briggs-PlayAI,
-                   Calum-PlayAI, Celeste-PlayAI, Cheyenne-PlayAI, Chip-PlayAI,
-                   Cillian-PlayAI, Deedee-PlayAI, Fritz-PlayAI, Gail-PlayAI,
-                   Indigo-PlayAI, Mamaw-PlayAI, Mason-PlayAI, Mikail-PlayAI,
-                   Mitch-PlayAI, Quinn-PlayAI, Thunder-PlayAI
-            audio_format: Output audio format (mp3, wav, flac, ogg, mulaw)
-
-        Returns:
-            Audio data as bytes
-
-        Raises:
-            Exception if TTS generation fails
-        """
-        try:
-            response = self.client.audio.speech.create(
-                model="playai-tts",
-                voice=voice,
-                input=text,
-                response_format=audio_format
-            )
-
-            # BinaryAPIResponse requires .read() method to get bytes
-            return response.read()
-
-        except Exception as e:
-            print(f"Error in text_to_speech: {e}")
-            raise Exception(f"TTS generation failed: {str(e)}")
