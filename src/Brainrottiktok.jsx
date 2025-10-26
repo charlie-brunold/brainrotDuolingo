@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Languages } from 'lucide-react';
 import MySlang from './Myslang.jsx';
 import { ArrowLeft } from 'lucide-react';
+import { franc } from 'franc-min';
 
 
 // --- SLANG TERMS (Static Data) ---

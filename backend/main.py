@@ -202,18 +202,30 @@ def fetch_and_cache_videos(config: VideoConfig, slang_only: bool = False, last_v
                 print(f"🔄 Fetching fresh data from YouTube API for topics: {config.topics} (Attempt {attempt + 1}/{MAX_RETRIES})")
                 shorts_data = fetcher.fetch_shorts(
                     topics=config.topics,
-                    shorts_per_topic=shorts_per_topic, 
-                    comments_per_short=config.comments_per_short
+                    shorts_per_topic=shorts_per_topic
                 )
                 if shorts_data:
                     break
             except Exception as e:
+                error_message = str(e)
                 if attempt < MAX_RETRIES - 1:
-                    print(f"⚠️ Fetch attempt {attempt + 1} failed: {str(e)[:50]}... Retrying in 2 seconds.")
-                    time.sleep(2) 
+                    print(f"⚠️ Fetch attempt {attempt + 1} failed: {error_message[:50]}... Retrying in 2 seconds.")
+                    time.sleep(2)
                 else:
-                    print(f"❌ Final fetch attempt failed after {MAX_RETRIES} retries. Error: {str(e)}")
-                    raise HTTPException(status_code=504, detail=f"YouTube API Request Timeout/Failure: {str(e)}")
+                    # On final failure, try to return ANY cached videos as fallback
+                    print(f"❌ Final fetch attempt failed after {MAX_RETRIES} retries. Error: {error_message}")
+                    print(f"🔍 Attempting to fall back to any available cached videos...")
+
+                    fallback_videos = db.get_any_cached_videos(limit=20)
+                    if fallback_videos:
+                        print(f"✅ Found {len(fallback_videos)} fallback videos from cache (quota exhausted)")
+                        random.shuffle(fallback_videos)
+                        return fallback_videos
+                    else:
+                        raise HTTPException(
+                            status_code=503,
+                            detail=f"YouTube API quota exhausted (resets midnight PT). No cached videos available. Error: {error_message}"
+                        )
 
 
         # 4. Save cache & process data
@@ -222,9 +234,9 @@ def fetch_and_cache_videos(config: VideoConfig, slang_only: bool = False, last_v
                 videos=shorts_data,
                 topics=config.topics,
                 custom_slang=custom_slang,
-                shorts_per_topic=shorts_per_topic, 
+                shorts_per_topic=shorts_per_topic,
                 comments_per_short=config.comments_per_short,
-                cache_hours=24
+                cache_hours=72  # Extended to 3 days to handle quota issues
             )
             print(f"💾 Cached {len(shorts_data)} videos to SQLite database")
             
@@ -389,8 +401,7 @@ def manual_discovery(request: DiscoverRequest):
     # 1. Fetch videos to get fresh comments (Aggressive parameters)
     shorts_data = fetcher.fetch_shorts(
         topics=topics,
-        shorts_per_topic=40, # Maximize videos searched
-        comments_per_short=80 # Maximize comments per video
+        shorts_per_topic=40 # Maximize videos searched
     )
     
     # 2. Collect ALL comments for the discovery process
