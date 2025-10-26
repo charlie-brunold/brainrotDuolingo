@@ -604,7 +604,7 @@ export default function BrainrotTikTok({ shortsData }) {
                   className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
                   onClick={() => setShowComments(false)}
                 ></div>
-                <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.slang_comment_count || 0)} Comments with Slang</h3>
+                
               </div>
 
               {/* Feedback - Sticky at top */}
