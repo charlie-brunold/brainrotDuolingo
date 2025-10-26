@@ -1,14 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { Sparkles, Lightbulb, Search, BookOpen, GraduationCap, X, Library } from 'lucide-react';
+import { Sparkles, Search, BookOpen, GraduationCap, X, Library, Trash2 } from 'lucide-react';
 
 export default function MySlang({
   mySlang,
+  setMySlang,
+  knownWords,
+  setKnownWords,
   suggestions,
-  loadingSuggestions,
-  knownWords = [] // Pass this from parent
+  loadingSuggestions
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'learning' or 'known'
+  const [activeTab, setActiveTab] = useState('all');
 
   // Filter slang based on search query
   const filteredSlang = useMemo(() => {
@@ -18,7 +20,7 @@ export default function MySlang({
     return mySlang.filter(slang => 
       slang.term.toLowerCase().includes(query) ||
       slang.definition.toLowerCase().includes(query) ||
-      slang.example.toLowerCase().includes(query)
+      slang.example?.toLowerCase().includes(query)
     );
   }, [mySlang, searchQuery]);
 
@@ -72,12 +74,54 @@ export default function MySlang({
 
   const totalWords = mySlang.length + knownWordsData.length;
 
+  // Remove a learning word
+  const removeFromLearning = (term) => {
+    const updated = mySlang.filter(s => s.term.toLowerCase() !== term.toLowerCase());
+    setMySlang(updated);
+    sessionStorage.setItem('brainrot_my_slang', JSON.stringify(updated));
+  };
+
+  // Remove a known word
+  const removeFromKnown = (term) => {
+    const updated = knownWords.filter(w => w.toLowerCase() !== term.toLowerCase());
+    setKnownWords(updated);
+    sessionStorage.setItem('brainrot_known_words', JSON.stringify(updated));
+  };
+
+  // Move from learning to known
+  const moveToKnown = (term) => {
+    // Add to known words
+    const updatedKnown = [...knownWords, term];
+    setKnownWords(updatedKnown);
+    sessionStorage.setItem('brainrot_known_words', JSON.stringify(updatedKnown));
+    
+    // Remove from learning
+    removeFromLearning(term);
+  };
+
+  // Move from known to learning
+  const moveToLearning = (term, definition = 'No definition available', example = '') => {
+    // Add to learning
+    const newSlangTerm = {
+      term: term,
+      definition: definition,
+      example: example,
+      learnedAt: Date.now()
+    };
+    const updatedLearning = [...mySlang, newSlangTerm];
+    setMySlang(updatedLearning);
+    sessionStorage.setItem('brainrot_my_slang', JSON.stringify(updatedLearning));
+    
+    // Remove from known
+    removeFromKnown(term);
+  };
+
   return (
     <div className="h-full w-full bg-black overflow-y-auto">
       <div className="p-6">
         {/* Header with Search */}
         <div className="mb-6">
-          <h2 className="text-white text-2xl font-bold mb-4">My Words</h2>
+          <h2 className="text-white text-2xl font-bold mb-4">My Vocabulary</h2>
           
           {/* Search Bar */}
           <div className="relative mb-4">
@@ -86,7 +130,7 @@ export default function MySlang({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search your words..."
+              placeholder="Search your vocabulary..."
               className="w-full bg-gray-800 text-white rounded-full pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/10"
             />
             {searchQuery && (
@@ -131,7 +175,7 @@ export default function MySlang({
             >
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-4 h-4" />
-                Learning
+                Want to Learn
                 <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full text-xs">
                   {mySlang.length}
                 </span>
@@ -151,7 +195,7 @@ export default function MySlang({
             >
               <div className="flex items-center gap-2">
                 <BookOpen className="w-4 h-4" />
-                Known
+                Already Know
                 <span className="bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full text-xs">
                   {knownWordsData.length}
                 </span>
@@ -190,7 +234,7 @@ export default function MySlang({
                   <div>
                     <h3 className="text-purple-400 font-semibold mb-3 flex items-center gap-2">
                       <GraduationCap className="w-4 h-4" />
-                      Words I'm Learning ({filteredAllWords.filter(w => w.type === 'learning').length})
+                      Want to Learn ({filteredAllWords.filter(w => w.type === 'learning').length})
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {filteredAllWords
@@ -198,11 +242,26 @@ export default function MySlang({
                         .map((word, index) => (
                           <div
                             key={`learning-${index}`}
-                            className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-white/10 hover:border-white/30 transition-all"
+                            className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-white/10 hover:border-white/30 transition-all group"
                           >
                             <div className="flex justify-between items-start mb-2">
                               <h3 className="text-white text-xl font-bold">{word.term}</h3>
-                              <Sparkles className="w-5 h-5 text-yellow-300" />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => moveToKnown(word.term)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-green-500/20 rounded"
+                                  title="Mark as known"
+                                >
+                                  <BookOpen className="w-4 h-4 text-green-400" />
+                                </button>
+                                <button
+                                  onClick={() => removeFromLearning(word.term)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded"
+                                  title="Remove"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-400" />
+                                </button>
+                              </div>
                             </div>
                             <p className="text-white/80 text-sm mb-3">{word.definition}</p>
                             {word.example && (
@@ -226,7 +285,7 @@ export default function MySlang({
                   <div>
                     <h3 className="text-green-400 font-semibold mb-3 flex items-center gap-2">
                       <BookOpen className="w-4 h-4" />
-                      Words I Know ({filteredAllWords.filter(w => w.type === 'known').length})
+                      Already Know ({filteredAllWords.filter(w => w.type === 'known').length})
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                       {filteredAllWords
@@ -234,13 +293,22 @@ export default function MySlang({
                         .map((word, index) => (
                           <div
                             key={`known-${index}`}
-                            className="bg-gradient-to-br from-green-900/20 to-emerald-900/20 rounded-lg p-4 border border-green-500/20 hover:border-green-500/40 transition-all"
+                            className="bg-gradient-to-br from-green-900/20 to-emerald-900/20 rounded-lg p-4 border border-green-500/20 hover:border-green-500/40 transition-all group"
                           >
-                            <div className="flex items-center gap-2">
-                              <BookOpen className="w-4 h-4 text-green-400" />
-                              <h3 className="text-white text-lg font-semibold">{word.term}</h3>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-1">
+                                <BookOpen className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                <h3 className="text-white text-lg font-semibold break-words">{word.term}</h3>
+                              </div>
+                              <button
+                                onClick={() => removeFromKnown(word.term)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded flex-shrink-0"
+                                title="Remove"
+                              >
+                                <Trash2 className="w-3 h-3 text-red-400" />
+                              </button>
                             </div>
-                            <p className="text-green-300 text-xs mt-2">Already mastered ✓</p>
+                            <p className="text-green-300 text-xs mt-2">Mastered ✓</p>
                           </div>
                         ))}
                     </div>
@@ -254,10 +322,10 @@ export default function MySlang({
             {/* Empty State for Learning */}
             {mySlang.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                <Lightbulb className="w-16 h-16 text-yellow-300 mb-4" />
-                <h3 className="text-white text-xl font-semibold mb-2">No slang learned yet</h3>
+                <GraduationCap className="w-16 h-16 text-purple-300 mb-4" />
+                <h3 className="text-white text-xl font-semibold mb-2">No words to learn yet</h3>
                 <p className="text-white/60 text-sm max-w-md">
-                  Hover over words in comments and click "Want to Learn" to start building your vocabulary!
+                  Hover over words in comments and click "Want to Learn" to add them here!
                 </p>
               </div>
             ) : filteredSlang.length === 0 ? (
@@ -275,11 +343,26 @@ export default function MySlang({
                   {filteredSlang.map((slang, index) => (
                     <div
                       key={index}
-                      className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-white/10 hover:border-white/30 transition-all"
+                      className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-white/10 hover:border-white/30 transition-all group"
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h3 className="text-white text-xl font-bold">{slang.term}</h3>
-                        <Sparkles className="w-5 h-5 text-yellow-300" />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => moveToKnown(slang.term)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-green-500/20 rounded"
+                            title="Mark as known"
+                          >
+                            <BookOpen className="w-4 h-4 text-green-400" />
+                          </button>
+                          <button
+                            onClick={() => removeFromLearning(slang.term)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-white/80 text-sm mb-3">{slang.definition}</p>
                       {slang.example && (
@@ -296,54 +379,18 @@ export default function MySlang({
                   ))}
                 </div>
 
-                {/* Suggestions Section */}
-                {!searchQuery && (
-                  <div className="border-t border-white/10 pt-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Sparkles className="w-5 h-5 text-purple-400" />
-                      <h3 className="text-white text-lg font-semibold">Suggested for You</h3>
-                      <span className="text-white/40 text-xs">AI-powered recommendations</span>
-                    </div>
+               
 
-                    {loadingSuggestions ? (
-                      <div className="flex items-center justify-center h-32">
-                        <div className="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
-                      </div>
-                    ) : suggestions.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {suggestions.map((suggestion) => (
-                          <div
-                            key={suggestion.term}
-                            className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg p-4 border border-purple-500/30 hover:border-purple-500/60 transition-all cursor-pointer"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <h4 className="text-white font-semibold">{suggestion.term}</h4>
-                              <span className="text-xs text-purple-300 bg-purple-500/20 px-2 py-1 rounded">
-                                {suggestion.category}
-                              </span>
-                            </div>
-                            <p className="text-white/70 text-sm mb-2">{suggestion.definition}</p>
-                            <p className="text-purple-300 text-xs italic">{suggestion.reason}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-white/60 text-sm">
-                        Learn a few more slang terms to get personalized suggestions!
-                      </p>
-                    )}
-                  </div>
-                )}
               </>
             )}
           </>
         ) : (
           <>
-            {/* Words I Know Tab */}
+            {/* Already Know Tab */}
             {knownWordsData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center px-4">
                 <BookOpen className="w-16 h-16 text-green-300 mb-4" />
-                <h3 className="text-white text-xl font-semibold mb-2">No words marked as known</h3>
+                <h3 className="text-white text-xl font-semibold mb-2">No known words yet</h3>
                 <p className="text-white/60 text-sm max-w-md">
                   When you hover over words you already know, click "Already Know" to track them here!
                 </p>
@@ -361,13 +408,22 @@ export default function MySlang({
                 {filteredKnownWords.map((word, index) => (
                   <div
                     key={index}
-                    className="bg-gradient-to-br from-green-900/20 to-emerald-900/20 rounded-lg p-4 border border-green-500/20 hover:border-green-500/40 transition-all"
+                    className="bg-gradient-to-br from-green-900/20 to-emerald-900/20 rounded-lg p-4 border border-green-500/20 hover:border-green-500/40 transition-all group"
                   >
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-green-400" />
-                      <h3 className="text-white text-lg font-semibold">{word.term}</h3>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1">
+                        <BookOpen className="w-4 h-4 text-green-400 flex-shrink-0" />
+                        <h3 className="text-white text-lg font-semibold break-words">{word.term}</h3>
+                      </div>
+                      <button
+                        onClick={() => removeFromKnown(word.term)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded flex-shrink-0"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </button>
                     </div>
-                    <p className="text-green-300 text-xs mt-2">Already mastered ✓</p>
+                    <p className="text-green-300 text-xs mt-2">Mastered ✓</p>
                   </div>
                 ))}
               </div>

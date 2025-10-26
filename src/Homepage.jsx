@@ -116,9 +116,8 @@ export default function HomePage({ onStartFetching }) {
             <Sparkles className="w-10 h-10 text-purple-500" />
             <h1 className="text-4xl font-bold text-white">Brain Thought</h1>
           </div>
-          <p className="text-gray-400 text-xl font-medium">
-            {typedText}
-            <span className="animate-pulse">|</span>
+          <p className="text-gray-400">
+            Select your interests to customize your language learning experience!
           </p>
         </div>
 

@@ -65,9 +65,14 @@ class ExplainCommentRequest(BaseModel):
     videoDescription: str
     detectedSlang: List[str] = []
 
+class SlangBreakdownItem(BaseModel):
+    term: str
+    definition: str
+    usage: str
+
 class ExplainCommentResponse(BaseModel):
     translation: str
-    context: str  # General context explanation
+    slangBreakdown: List[SlangBreakdownItem]
 
 class TranslateVideoRequest(BaseModel):
     video_id: str
