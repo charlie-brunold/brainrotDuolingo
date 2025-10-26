@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Languages } from 'lucide-react';
 import MySlang from './Myslang.jsx';
 import { ArrowLeft } from 'lucide-react';
 
@@ -54,7 +55,14 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
   const [showMySlang, setShowMySlang] = useState(false); // Toggle for My Slang overlay
   const [suggestions, setSuggestions] = useState([]); // AI-suggested slang terms
   const [loadingSuggestions, setLoadingSuggestions] = useState(false); // Loading state for suggestions
+  const [isTranslating, setIsTranslating] = useState(false); // Loading state for translation
+  const [translatedText, setTranslatedText] = useState(''); // Translated text
+  const [translationAudio, setTranslationAudio] = useState(null); // Audio element for translation
+  const [showTranslation, setShowTranslation] = useState(false); // Show translated text overlay
+  const [targetLanguage, setTargetLanguage] = useState('Spanish'); // Target language for translation
+  const [translationError, setTranslationError] = useState(null); // Error message for translation
   const containerRef = useRef(null);
+  const audioRef = useRef(null); // Ref for audio element
   
   // Use provided shortsData or fallback
   const VIDEOS = shortsData || [];
@@ -78,6 +86,12 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
       setUserComments([]);
       setComment('');
       setShowFeedback(false);
+      setTranslationError(null);
+      setShowTranslation(false);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     }
   };
 
@@ -130,7 +144,19 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
 
   useEffect(() => {
     if (currentVideo && currentVideo.unique_slang_terms) {
-      const suggestions = currentVideo.unique_slang_terms.slice(0, 3);
+      // Get all slang terms from dictionary
+      const allSlangTerms = Object.keys(SLANG_TERMS);
+
+      // Filter out forbidden slang (from example comments)
+      const forbiddenSlang = currentVideo.unique_slang_terms.map(s => s.toLowerCase());
+      const allowedSlang = allSlangTerms.filter(
+        term => !forbiddenSlang.includes(term.toLowerCase())
+      );
+
+      // Randomly select 3 alternative slang terms
+      const shuffled = [...allowedSlang].sort(() => Math.random() - 0.5);
+      const suggestions = shuffled.slice(0, 3);
+
       setSuggestedSlang(suggestions);
     }
   }, [currentVideoIndex, currentVideo]);
@@ -155,6 +181,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           targetLanguage: 'English', // TODO: Make this configurable
           videoLikeCount: currentVideo.like_count || 0,
           availableSlang: currentVideo.unique_slang_terms || [],
+          forbiddenSlang: currentVideo.unique_slang_terms || [], // Slang from example comments
         }),
       });
 
@@ -185,6 +212,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           videoTitle: currentVideo.title || 'Untitled Video',
           targetLanguage: 'English', // TODO: Make this configurable
           availableSlang: currentVideo.unique_slang_terms || [],
+          forbiddenSlang: currentVideo.unique_slang_terms || [], // Slang from example comments
         }),
       });
 
@@ -412,6 +440,67 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
     }
   };
 
+  const handleTranslateVideo = async () => {
+    if (!videoId || isTranslating) return;
+
+    setIsTranslating(true);
+    setTranslationError(null); // Clear any previous errors
+
+    try {
+      const response = await fetch('http://localhost:3001/api/translate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          video_id: videoId,
+          target_language: targetLanguage
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Translation failed');
+      }
+
+      const data = await response.json();
+
+      // Set translated text
+      setTranslatedText(data.translated_text);
+      setShowTranslation(true);
+
+      // Create audio from base64
+      const audioBlob = await fetch(`data:audio/mp3;base64,${data.audio_base64}`).then(r => r.blob());
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      // Create and play audio
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.play();
+
+      // Clean up when audio ends
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+      };
+
+    } catch (error) {
+      console.error('Error translating video:', error);
+      setTranslationError(error.message || 'Translation unavailable. The video may not have captions.');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleStopTranslation = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setShowTranslation(false);
+    setTranslatedText('');
+  };
+
   // --- Render Logic ---
 
   if (!currentVideo) {
@@ -427,63 +516,112 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
   }
 
   return (
-    <div className="h-screen w-full bg-black relative overflow-hidden">
-      <div
-        ref={containerRef}
-        onWheel={handleWheel}
-        onTouchStart={handleTouchStart} // ADDED
-        onTouchMove={handleTouchMove}   // ADDED
-        onTouchEnd={handleTouchEnd}     // ADDED
-        className="relative transition-transform duration-500 ease-out"
-        style={{ 
-          transform: `translateY(-${currentVideoIndex * 100}vh)`,
-          height: `${VIDEOS.length * 100}vh`
-        }}
-      >
-        {/* Render all videos stacked vertically */}
-        {VIDEOS.map((video, index) => {
-          const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
-          
-          return (
-            <div key={index} className="h-screen w-full flex items-center justify-center bg-black relative">
-              {videoIdForIndex ? (
-                <iframe
-                  width="100%"
-                  height="100%"
-                  src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=0&controls=1&rel=0&modestbranding=1`}
-                  title={video.title}
-                  frameBorder="0"
-                  allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="absolute inset-0"
-                  style={{ objectFit: 'cover' }}
-                />
-              ) : (
-                <div className="text-center text-white p-8">
-                  <img 
-                    src={video.thumbnail} 
-                    alt={video.title}
-                    className="max-w-full max-h-full rounded-lg mb-4"
-                  />
-                  <div className="text-2xl font-bold mb-2">{video.title}</div>
-                  <div className="text-lg opacity-80">@{video.channel}</div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+    <div className="h-screen w-full bg-black relative overflow-hidden flex flex-col">
+      {/* Persistent Header - Fixed at top */}
+      <div className="flex-shrink-0 flex justify-center gap-8 p-4 bg-black z-50 border-b border-gray-800">
+        <button
+          onClick={() => setShowMySlang(true)}
+          className={`text-sm font-semibold transition-colors pb-1 ${
+            showMySlang
+              ? 'text-white border-b-2 border-white'
+              : 'text-white/70 hover:text-white'
+          }`}
+        >
+          My Slang {mySlang.length > 0 && `(${mySlang.length})`}
+        </button>
+        <button
+          onClick={() => setShowMySlang(false)}
+          className={`text-sm font-semibold transition-colors pb-1 ${
+            !showMySlang
+              ? 'text-white border-b-2 border-white'
+              : 'text-white/70 hover:text-white'
+          }`}
+        >
+          For You
+        </button>
       </div>
 
-      {/* Overlay UI for current video */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="h-full w-full relative pointer-events-auto"
-             style={{ pointerEvents: 'none' }}>
-        {/* Video Container with REAL YouTube Video - NOW JUST A PLACEHOLDER FOR POSITIONING */}
-        <div className="h-full w-full flex items-center justify-center bg-transparent" style={{ pointerEvents: 'none' }}>
-        </div>
+      {/* Content Area - Either Video Feed or My Slang */}
+      <div className="flex-1 relative overflow-hidden">
+        {!showMySlang ? (
+          // Video Feed View
+          <>
+            <div
+              ref={containerRef}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              className="absolute inset-0 overflow-hidden"
+            >
+              {/* Persistent sliding window - keeps adjacent videos mounted */}
+              {[currentVideoIndex - 1, currentVideoIndex, currentVideoIndex + 1].map((index, position) => {
+                // Skip if index is out of bounds
+                if (index < 0 || index >= VIDEOS.length) return null;
+
+                const video = VIDEOS[index];
+                const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1] : null;
+                const isCurrent = index === currentVideoIndex;
+
+                // Calculate position: previous video (-100%), current (0%), next (+100%)
+                const offsetPosition = position - 1; // -1, 0, or 1
+
+                return (
+                  <motion.div
+                    key={index}
+                    className="absolute inset-0 w-full h-full"
+                    initial={false}
+                    animate={{
+                      y: `${offsetPosition * 100}%`,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 300,
+                      damping: 30,
+                      mass: 0.8
+                    }}
+                  >
+                    <div className="w-full h-full flex items-center justify-center bg-black">
+                      {videoIdForIndex ? (
+                        <iframe
+                          key={`iframe-${index}`}
+                          width="100%"
+                          height="100%"
+                          src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=${isCurrent ? 1 : 0}&controls=1&rel=0&modestbranding=1`}
+                          title={video.title}
+                          frameBorder="0"
+                          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          className="absolute inset-0"
+                          style={{ objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div className="text-center text-white p-8">
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title}
+                            className="max-w-full max-h-full rounded-lg mb-4"
+                          />
+                          <div className="text-2xl font-bold mb-2">{video.title}</div>
+                          <div className="text-lg opacity-80">@{video.channel}</div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* Overlay UI for current video */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="h-full w-full relative pointer-events-auto"
+                   style={{ pointerEvents: 'none' }}>
+              {/* Video Container with REAL YouTube Video - NOW JUST A PLACEHOLDER FOR POSITIONING */}
+              <div className="h-full w-full flex items-center justify-center bg-transparent" style={{ pointerEvents: 'none' }}>
+              </div>
 
         {/* Navigation Arrows */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50" style={{ pointerEvents: 'auto' }}>
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-10" style={{ pointerEvents: 'auto' }}>
         <button
             onClick={() => scrollToVideo(currentVideoIndex - 1)}
             disabled={currentVideoIndex === 0 || showComments}
@@ -516,6 +654,49 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
             </button>
             <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.comment_count)}</span>
           </div>
+          <div className="flex flex-col items-center gap-1 relative">
+            <button
+              onClick={showTranslation ? handleStopTranslation : handleTranslateVideo}
+              disabled={isTranslating}
+              className={`p-3 backdrop-blur-sm rounded-full transition-colors ${
+                showTranslation
+                  ? 'bg-green-500/80'
+                  : translationError
+                  ? 'bg-red-500/80'
+                  : 'bg-white/20 hover:bg-white/30'
+              } ${isTranslating ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={showTranslation ? 'Stop Translation' : 'Translate to Spanish'}
+            >
+              {isTranslating ? (
+                <div className="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Languages className="w-7 h-7 text-white" />
+              )}
+            </button>
+            <span className="text-white text-xs font-semibold">Translate</span>
+
+            {/* Unavailable Tooltip */}
+            {translationError && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className="absolute right-full mr-3 top-0 w-64 bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg p-3 border border-gray-600/50"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <div className="text-white/90 text-xs">{translationError}</div>
+                  </div>
+                  <button
+                    onClick={() => setTranslationError(null)}
+                    className="p-1 hover:bg-white/20 rounded-full transition-colors flex-shrink-0"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </div>
           <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
             <Share2 className="w-7 h-7 text-white" />
           </div>
@@ -541,10 +722,30 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           </div>
         </div>
 
+        {/* Translation Overlay */}
+        {showTranslation && translatedText && (
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-30 max-h-48 overflow-y-auto"
+               style={{ pointerEvents: 'auto' }}>
+            <div className="flex items-start gap-2 mb-2">
+              <Languages className="w-5 h-5 text-green-400 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <div className="text-green-400 font-semibold text-sm mb-1">Translation ({targetLanguage})</div>
+                <div className="text-white text-sm">{translatedText}</div>
+              </div>
+              <button
+                onClick={handleStopTranslation}
+                className="p-1 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Comments Section Overlay */}
         {showComments && (
-          <div 
-            className="absolute inset-0 bg-black/50 z-30"
+          <div
+            className="absolute inset-0 bg-black/50 z-40"
             onClick={() => setShowComments(false)}
             style={{ pointerEvents: 'auto' }}
           >
@@ -565,8 +766,8 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                 <div className="flex items-start gap-2">
                   <Sparkles className="w-5 h-5 text-white flex-shrink-0 mt-1" />
                   <div>
-                    <div className="text-white font-semibold mb-1">Practice with real comments!</div>
-                    <div className="text-white/90 text-sm">Try using the slang from this video</div>
+                    <div className="text-white font-semibold mb-1">Use NEW slang (not from examples!)</div>
+                    <div className="text-white/90 text-sm">Try different slang than what's in the comments</div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <span className="text-white/80 text-xs">Suggested:</span>
                       {suggestedSlang.map(slang => (
@@ -770,37 +971,17 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           </div>
         )}
 
-        {/* My Slang Component */}
-        {showMySlang && (
+              </div>
+            </div>
+          </>
+        ) : (
+          // My Slang View
           <MySlang
             mySlang={mySlang}
             suggestions={suggestions}
             loadingSuggestions={loadingSuggestions}
-            onClose={() => setShowMySlang(false)}
           />
         )}
-
-         {/* Top Bar */}
-        <div className="absolute top-0 left-0 right-0 p-4 flex justify-center gap-8 z-10" style={{ pointerEvents: 'auto' }}>
-          
-          {/* Back Arrow Button */}
-          <button
-            onClick={onBackToHome}
-            className="absolute left-4 top-4 text-white hover:text-gray-300 transition-all z-20 p-2"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-
-          <button
-            onClick={() => setShowMySlang(true)}
-            className="text-white/70 text-sm font-semibold hover:text-white transition-colors"
-          >
-            My Slang {mySlang.length > 0 && `(${mySlang.length})`}
-          </button>
-          <button className="text-white text-sm font-bold border-b-2 border-white pb-1">For You</button>
-        </div>
-        </div>
       </div>
     </div>
   );

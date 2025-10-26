@@ -4,3 +4,4 @@ python-dotenv
 requests
 groq
 pydantic
+youtube-transcript-api

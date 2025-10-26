@@ -1,6 +1,6 @@
 # Brainrot Duolingo
 
-Learn how real people actually speak by scrolling through YouTube Shorts and commenting in your target language. If you're a non-native speaker struggling to understand slang like "bussin", "fr", or "ngl", this app gives you a safe space to see these terms used in context and practice using them yourself. AI evaluates your comments and gives you instant feedback disguised as social validation—so learning feels like scrolling TikTok, not doing homework.
+Learn any language by scrolling through YouTube Shorts and commenting like you're on TikTok. Watch authentic content, pick up on memes and cultural references, then practice by commenting in your target language. AI evaluates your comments instantly and gives you feedback disguised as social validation—likes, replies, and roasts that teach. Language learning that feels like scrolling, not studying.
 
 ## Setup
 

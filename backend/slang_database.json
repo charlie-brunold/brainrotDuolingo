@@ -23,5 +23,160 @@
     "definition": "Agreement or confirmation, like saying okay",
     "category": "agreement",
     "example": "Bet, see you there"
+  },
+  "lol": {
+    "definition": "Laugh out loud, used to express extreme amusement",
+    "category": "Internet Slang",
+    "example": "The camera falling got me dying, Francis's screaming and 'tHaT'S wHaT sHe sAiD' 'hoW dO yOu eVeN HOW DO U FRANCIS!!!' LOL-"
+  },
+  "lmao": {
+    "definition": "Laughing my ass off, used to express extreme laughter or amusement",
+    "category": "Internet Slang",
+    "example": "Don’t chew in my ear Don’t put your ear next to my chewing got me LMAO 😂😂😂😂"
+  },
+  "y'all": {
+    "definition": "You all, a casual way to address a group of people",
+    "category": "Colloquialism",
+    "example": "Now that Nick has been on the LOL podcast Francis should be on it to because he had me rolling and crying on the floor 😂 y’all are HILARIOUS!!! 🤣🤣"
+  },
+  "bro": {
+    "definition": "Brother, used as a casual greeting or term of endearment",
+    "category": "Colloquialism",
+    "example": "Bro i can't find the brain dead comments y'all talking abt fr 👽"
+  },
+  "goat": {
+    "definition": "A phrase used to describe something or someone as exceptional or of high quality",
+    "category": "Slang",
+    "example": "Ayo this is one is a goat😂😂😂"
+  },
+  "rolling": {
+    "definition": "To be laughing extremely hard, often to the point of being on the floor",
+    "category": "Colloquialism",
+    "example": "APNE LAMBE SE NOODS DAL DO BRUH HAD BE ROLLING ON THE FLOOR FR!💀😭"
+  },
+  "got me": {
+    "definition": "An expression used to convey that something is funny or relatable",
+    "category": "Colloquialism",
+    "example": "Don’t chew in my ear Don’t put your ear next to my chewing got me LMAO 😂😂😂😂"
+  },
+  "like a": {
+    "definition": "Used for comparisons, often in an exaggerated manner",
+    "category": "Colloquialism",
+    "example": "Francis fr sounded like a hawk at one point.. they should hire him from some movie sound effects or smth 🤪😂"
+  },
+  "hit": {
+    "definition": "to achieve or reach a target, especially a high number",
+    "category": "Slang",
+    "example": "YOU NEED TO HIT 1 MILLION SUBSCRIBERS"
+  },
+  "lowkey/highkey": {
+    "definition": "Not present in the provided context, but 'fr' is often used in conjunction with these terms to express a subtle or intense feeling about something",
+    "category": "Slang",
+    "example": "Not present in the provided context"
+  },
+  "no cap": {
+    "definition": "Not present in the provided context, but often used in informal settings to emphasize the truth or authenticity of something",
+    "category": "Slang",
+    "example": "Not present in the provided context"
+  },
+  "don't @ me": {
+    "definition": "Not present in the provided context, but often used to express that one's opinion might be unpopular or to preemptively defend oneself from criticism",
+    "category": "Internet Colloquialism",
+    "example": "Not present in the provided context"
+  },
+  "bestie": {
+    "definition": "Not present in the provided context, but a colloquial or affectionate term used to refer to a close friend",
+    "category": "Colloquialism",
+    "example": "Not present in the provided context"
+  },
+  "tea": {
+    "definition": "Not present in the provided context, but often refers to gossip or juicy information",
+    "category": "Slang",
+    "example": "Not present in the provided context"
+  },
+  "periodt": {
+    "definition": "Not present in the provided context, but used to emphasize the end of a statement or to convey strong agreement",
+    "category": "Slang",
+    "example": "Not present in the provided context"
+  },
+  "don't chew in my ear": {
+    "definition": "A phrase popularized by a comedic sketch or meme, used humorously to express annoyance or discomfort",
+    "category": "Meme/Colloquialism",
+    "example": "Don’t chew in my ear Don’t put your ear next to my chewing got me LMAO 😂😂😂😂"
+  },
+  "rolling on the floor": {
+    "definition": "extremely funny, to the point of laughing uncontrollably",
+    "category": "Reaction",
+    "example": "I was rolling on the floor when I saw that hilarious video!"
+  },
+  "no lie": {
+    "definition": "Not found in the provided context, but 'bruh' and 'fr' are similar in usage",
+    "category": "Colloquialism",
+    "example": "Not provided, but an example would be 'This pizza is fire, no lie'"
+  },
+  "dead": {
+    "definition": "Used to express that something is hilariously funny",
+    "category": "reaction",
+    "example": "I’m dead 💀 that was so funny"
+  },
+  "mid": {
+    "definition": "Mediocre, average, or underwhelming",
+    "category": "negative",
+    "example": "That new track was kinda mid ngl"
+  },
+  "rizz": {
+    "definition": "Charisma or charm, especially when flirting",
+    "category": "social",
+    "example": "Bro got no rizz 💀"
+  },
+  "sus": {
+    "definition": "Suspicious or sketchy",
+    "category": "slang",
+    "example": "That comment was sus ngl"
+  },
+  "cap": {
+    "definition": "Lie or exaggeration",
+    "category": "slang",
+    "example": "That’s cap 💀 ain’t no way"
+  },
+  "vibe": {
+    "definition": "Atmosphere, mood, or overall feeling",
+    "category": "expression",
+    "example": "This video got such a chill vibe ✨"
+  },
+  "fire": {
+    "definition": "Amazing or really good",
+    "category": "compliment",
+    "example": "That beat is straight fire 🔥"
+  },
+  "valid": {
+    "definition": "Cool or impressive; can also mean legitimate",
+    "category": "slang",
+    "example": "That outfit is valid fr"
+  },
+  "ate": {
+    "definition": "Performed exceptionally well",
+    "category": "compliment",
+    "example": "She ate and left no crumbs 💅"
+  },
+  "delulu": {
+    "definition": "Delusional, used jokingly about unrealistic optimism",
+    "category": "internet slang",
+    "example": "I’m so delulu thinking he’d reply 😭"
+  },
+  "slay": {
+    "definition": "To succeed in an impressive or confident way",
+    "category": "compliment",
+    "example": "She slayed that performance 🔥"
+  },
+  "touch grass": {
+    "definition": "Telling someone to go outside or take a break from online",
+    "category": "internet slang",
+    "example": "Bro arguing in the comments needs to touch grass 🌱"
+  },
+  "gyatt": {
+    "definition": "Exclamation reacting to someone's appearance, usually shocked or impressed",
+    "category": "internet slang",
+    "example": "GYATT 😭😭😭"
   }
 }

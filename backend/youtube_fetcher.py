@@ -17,80 +17,64 @@ class YouTubeShortsSlangFetcher:
             'yeet', 'slaps', 'valid', 'mood', 'hits different'
         }
 
-    def search_shorts(self, query: str, max_results: int = 10) -> List[Dict]:
-        """Search YouTube Shorts videos related to a topic."""
-        url = f"{self.base_url}/search"
-        params = {
-            'key': self.api_key,
-            'q': query,
-            'part': 'snippet',
-            'type': 'video',
-            'maxResults': max_results,
-            'order': 'viewCount',
-            'relevanceLanguage': 'en',
-        }
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            items = response.json().get('items', [])
-            video_ids = [item['id']['videoId'] for item in items]
-            return self.get_video_details(video_ids)
-        except Exception as e:
-            print(f"❌ Error searching Shorts: {e}")
-            return []
+    def search_shorts(self, topic: str, max_results: int = 10):
+        """
+        Searches YouTube for Shorts matching the topic.
+        Ensures only embeddable videos are returned.
+        """
+        results = []
+        print(f"🎯 Searching YouTube Shorts for topic: {topic}")
 
-    def get_video_details(self, video_ids: List[str]) -> List[Dict]:
-        """Get detailed video information - FILTER for videos WITH comments"""
-        if not video_ids:
-            return []
-        url = f"{self.base_url}/videos"
-        params = {
-            'key': self.api_key,
-            'id': ','.join(video_ids),
-            'part': 'snippet,contentDetails,statistics'
-        }
         try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            items = response.json().get('items', [])
-            videos = []
-            
-            for item in items:
-                stats = item.get('statistics', {})
-                
-                # CRITICAL: Skip videos with disabled comments
-                comment_count = int(stats.get('commentCount', 0))
-                if comment_count == 0:
-                    continue
-                
-                duration_str = item['contentDetails']['duration']
-                duration_seconds = self.parse_duration(duration_str)
-                
-                # Filter for Shorts (under 60 seconds)
-                if duration_seconds > 60:
+            search_response = self.youtube.search().list(
+                q=topic,
+                part="snippet",
+                type="video",
+                videoDuration="short",
+                maxResults=max_results * 2,  # fetch extras to filter out bad ones
+                videoEmbeddable="true"
+            ).execute()
+
+            for item in search_response.get("items", []):
+                video_id = item["id"]["videoId"]
+
+                # Check if embeddable
+                video_details = self.youtube.videos().list(
+                    part="status,snippet,statistics",
+                    id=video_id
+                ).execute()
+
+                if not video_details.get("items"):
                     continue
 
-                thumbnails = item['snippet']['thumbnails']
-                thumbnail_url = (thumbnails.get('maxres') or thumbnails.get('high') or
-                                 thumbnails.get('medium') or thumbnails.get('default', {})).get('url', '')
+                video_info = video_details["items"][0]
+                status = video_info.get("status", {})
+                if not status.get("embeddable", False):
+                    print(f"🚫 Skipping unembeddable video: {video_id}")
+                    continue
 
-                videos.append({
-                    'video_id': item['id'],
-                    'title': item['snippet']['title'],
-                    'description': item['snippet']['description'],
-                    'channel': item['snippet']['channelTitle'],
-                    'thumbnail': thumbnail_url,
-                    'duration_seconds': duration_seconds,
-                    'view_count': int(stats.get('viewCount', 0)),
-                    'like_count': int(stats.get('likeCount', 0)),
-                    'comment_count': comment_count,
-                    'url': f"https://www.youtube.com/shorts/{item['id']}"
+                snippet = video_info["snippet"]
+                stats = video_info.get("statistics", {})
+
+                results.append({
+                    "video_id": video_id,
+                    "title": snippet.get("title", ""),
+                    "description": snippet.get("description", ""),
+                    "channel_title": snippet.get("channelTitle", ""),
+                    "like_count": int(stats.get("likeCount", 0)) if "likeCount" in stats else 0,
+                    "topic": topic,
+                    "embeddable": True
                 })
-            
-            return videos
+
+                if len(results) >= max_results:
+                    break
+
         except Exception as e:
-            print(f"❌ Error getting video details: {e}")
-            return []
+            print(f"⚠️ Error searching for topic '{topic}': {str(e)}")
+
+        print(f"✅ Found {len(results)} embeddable shorts for '{topic}'")
+        return results
+
 
     def get_video_comments(self, video_id: str, max_results: int = 50) -> List[Dict]:
         """Fetch comments for a single video - with proper error handling"""
@@ -163,23 +147,61 @@ class YouTubeShortsSlangFetcher:
     def fetch_shorts(self, topics: List[str], shorts_per_topic: int = 10, 
                      comments_per_short: int = 50, custom_slang: List[str] = None) -> List[Dict]:
         """
-        Main function: Fetch shorts with slang comments
-        OPTIMIZED for speed and reliability
+        Main function: Fetch shorts and detect slang in comments.
+        Returns ALL videos that meet basic criteria (commentable, short duration).
+        
+        If a single topic is provided (custom search), it also executes a broader search
+        to interweave more content from the default list.
         """
         all_shorts_data = []
         slang_terms = set(self.slang_terms)
         
         if custom_slang:
             slang_terms.update(s.lower() for s in custom_slang)
+
+        # Determine the effective list of topics to search
+        search_topics = topics.copy()
         
-        print(f"\n🔍 Searching {len(topics)} topics for shorts...")
+        # Define SUPPLEMENTAL topics (previously "default")
+        supplemental_topics = ["gaming", "food review", "funny moments", "dance", "pets"]
+        
+        # Determine if this is a focused custom search vs. a broad search
+        is_focused_custom_search = len(topics) == 1 and topics[0] not in supplemental_topics
+        
+        if is_focused_custom_search:
+             print(f"\n💡 Focused topic '{topics[0]}' detected. Interweaving with supplementary topics for variety.")
+             # Add supplemental topics but search them minimally
+             for supplemental_topic in supplemental_topics:
+                 if supplemental_topic not in search_topics:
+                     search_topics.append(supplemental_topic)
+        
+        print(f"\n🔍 Searching {len(search_topics)} topics for shorts...")
         start_time = time.time()
         
-        for topic_idx, topic in enumerate(topics, 1):
-            print(f"\n[{topic_idx}/{len(topics)}] Topic: '{topic}'")
+        total_shorts_with_slang = 0
+        
+        # Adjust results per topic based on how many searches we are doing
+        if is_focused_custom_search:
+             # Search the custom topic fully (at shorts_per_topic count)
+             custom_topic_max = shorts_per_topic
+             # Search supplemental topics minimally (2 results each)
+             supplemental_topic_max = 2 
+             
+        for topic_idx, topic in enumerate(search_topics, 1):
+            
+            # Set max_results based on whether it's the custom topic or an interweaved topic
+            if is_focused_custom_search and topic == topics[0]:
+                max_results = custom_topic_max
+            elif is_focused_custom_search and topic != topics[0]:
+                max_results = supplemental_topic_max
+            else:
+                # If it's a regular multi-topic search, use the standard count
+                max_results = shorts_per_topic
+                
+            print(f"\n[{topic_idx}/{len(search_topics)}] Topic: '{topic}' (Max: {max_results})")
             
             # Search for videos
-            shorts = self.search_shorts(topic, max_results=shorts_per_topic)
+            shorts = self.search_shorts(topic, max_results=max_results)
             print(f"   Found {len(shorts)} shorts with comments enabled")
             
             if not shorts:
@@ -192,37 +214,43 @@ class YouTubeShortsSlangFetcher:
             print(f"   Fetching comments from {len(video_ids)} videos...")
             comments_dict = self.fetch_comments_parallel(video_ids, max_results=comments_per_short)
             
+            shorts_with_slang_count = 0
+            
             # Process each short
-            shorts_with_slang = 0
             for short in shorts:
                 video_id = short['video_id']
                 comments = comments_dict.get(video_id, [])
                 
-                if not comments:
-                    continue
-                
-                # Find comments with slang
+                # --- NEW LOGIC: DETECT SLANG BUT APPEND ALL VIDEOS ---
                 comments_with_slang = []
-                for comment in comments:
-                    detected_slang = self.detect_slang_in_text(comment['text'], slang_terms)
-                    if detected_slang:
-                        comment['detected_slang'] = detected_slang
-                        comments_with_slang.append(comment)
+                
+                if comments:
+                    for comment in comments:
+                        detected_slang = self.detect_slang_in_text(comment['text'], slang_terms)
+                        if detected_slang:
+                            comment['detected_slang'] = detected_slang
+                            comments_with_slang.append(comment)
+                
+                # 1. Always attach the comment data, even if empty
+                short['comments_with_slang'] = comments_with_slang
+                short['slang_comment_count'] = len(comments_with_slang)
+                short['unique_slang_terms'] = list(set(
+                    slang for c in comments_with_slang for slang in c['detected_slang']
+                ))
+                
+                # 2. APPEND ALL videos that are eligible (not just those with slang)
+                all_shorts_data.append(short)
                 
                 if comments_with_slang:
-                    short['comments_with_slang'] = comments_with_slang
-                    short['slang_comment_count'] = len(comments_with_slang)
-                    short['unique_slang_terms'] = list(set(
-                        slang for c in comments_with_slang for slang in c['detected_slang']
-                    ))
-                    all_shorts_data.append(short)
-                    shorts_with_slang += 1
-            
-            print(f"   ✅ {shorts_with_slang} shorts have slang comments")
+                    shorts_with_slang_count += 1
+                # --- END NEW LOGIC ---
+
+            total_shorts_with_slang += shorts_with_slang_count
+            print(f"   ✅ {shorts_with_slang_count} shorts have slang comments")
         
         elapsed = time.time() - start_time
         print(f"\n⏱️ Total time: {elapsed:.1f}s")
-        print(f"📊 Found {len(all_shorts_data)} shorts with slang\n")
+        print(f"📊 Found {len(all_shorts_data)} total short videos (of which {total_shorts_with_slang} contain slang)\n")
         
         return all_shorts_data
 
@@ -232,7 +260,12 @@ class YouTubeShortsSlangFetcher:
         found = []
         
         for slang in slang_terms:
-            pattern = r'\b' + re.escape(slang) + r'\b'
+            # Handle multi-word slang like 'hits different'
+            if ' ' in slang:
+                pattern = re.escape(slang)
+            else:
+                pattern = r'\b' + re.escape(slang) + r'\b'
+                
             if re.search(pattern, text_lower):
                 found.append(slang)
         
@@ -251,5 +284,6 @@ class YouTubeShortsSlangFetcher:
         """Check if text is primarily English"""
         if not text:
             return False
+        # Simple check: 80% of characters are within the standard ASCII range
         ascii_chars = sum(1 for c in text if ord(c) < 128)
         return ascii_chars / len(text) > 0.8

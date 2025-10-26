@@ -43,7 +43,8 @@ class GroqCommentEvaluator:
         user_comment: str,
         target_language: str,
         video_like_count: int,
-        available_slang: List[str] = None
+        available_slang: List[str] = None,
+        forbidden_slang: List[str] = None
     ) -> Dict:
         """
         Evaluate a user's comment with detailed scoring and feedback.
@@ -55,6 +56,7 @@ class GroqCommentEvaluator:
             target_language: Language being learned (e.g., "English", "Spanish")
             video_like_count: Number of likes on the video (for like calculation)
             available_slang: List of slang terms available in the video
+            forbidden_slang: List of slang from example comments (user shouldn't copy these)
 
         Returns:
             Dictionary with score, likes, feedback, and detailed breakdown
@@ -62,8 +64,14 @@ class GroqCommentEvaluator:
         # Detect which slang terms user attempted to use
         if available_slang is None:
             available_slang = []
+        if forbidden_slang is None:
+            forbidden_slang = []
 
         detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
+
+        # Classify slang into allowed vs forbidden
+        detected_forbidden = self._detect_slang_in_comment(user_comment, forbidden_slang)
+        allowed_slang_used = [s for s in detected_slang if s not in detected_forbidden]
 
         # Construct evaluation prompt with slang focus
         prompt = self._build_evaluation_prompt(
@@ -72,7 +80,9 @@ class GroqCommentEvaluator:
             user_comment,
             target_language,
             available_slang,
-            detected_slang
+            allowed_slang_used,
+            forbidden_slang,
+            detected_forbidden
         )
 
         try:
@@ -273,29 +283,38 @@ class GroqCommentEvaluator:
         user_comment: str,
         target_language: str,
         available_slang: List[str] = None,
-        detected_slang: List[str] = None
+        allowed_slang_used: List[str] = None,
+        forbidden_slang: List[str] = None,
+        detected_forbidden: List[str] = None
     ) -> str:
-        """Build the evaluation prompt with slang focus when applicable."""
+        """Build the evaluation prompt with forbidden slang logic."""
 
         if available_slang is None:
             available_slang = []
-        if detected_slang is None:
-            detected_slang = []
+        if allowed_slang_used is None:
+            allowed_slang_used = []
+        if forbidden_slang is None:
+            forbidden_slang = []
+        if detected_forbidden is None:
+            detected_forbidden = []
 
         # Build slang context section
         slang_context = ""
-        if available_slang:
-            slang_list = ", ".join(available_slang)
-            slang_context = f"\n[Slang Context]\nAvailable slang from video: {slang_list}\n"
+        if forbidden_slang:
+            forbidden_list = ", ".join(forbidden_slang)
+            slang_context = f"\n[Slang Context]\nForbidden slang (from example comments): {forbidden_list}\n"
 
-            if detected_slang:
-                detected_list = ", ".join(detected_slang)
-                slang_context += f"User attempted to use: {detected_list}\n"
+            if allowed_slang_used:
+                allowed_list = ", ".join(allowed_slang_used)
+                slang_context += f"User successfully used DIFFERENT slang: {allowed_list}\n"
+            elif detected_forbidden:
+                detected_list = ", ".join(detected_forbidden)
+                slang_context += f"User only used forbidden slang: {detected_list} (treat as no slang used)\n"
             else:
-                slang_context += "User did not use any of the available slang terms.\n"
+                slang_context += "User did not use any slang.\n"
 
         # Adjust evaluation criteria based on slang usage
-        if detected_slang:
+        if allowed_slang_used:
             evaluation_criteria = """[Evaluation Criteria]
 Score 0-100 based on:
 1. SLANG USAGE CORRECTNESS (70% weight) - PRIMARY FOCUS
@@ -309,20 +328,24 @@ IMPORTANT: Focus heavily on whether the slang is used correctly. Wrong slang usa
 
 MODIFIERS:
 - Comment is less than 5 words: Apply -10 penalty to final score"""
-        elif available_slang:
+        elif forbidden_slang:
             evaluation_criteria = """[Evaluation Criteria]
-CRITICAL: User had slang available but DID NOT use any. MAXIMUM POSSIBLE SCORE IS 50/100.
+CRITICAL: User was required to use DIFFERENT slang than example comments, but either:
+- Used only forbidden slang (copied from examples), OR
+- Used no slang at all
+
+MAXIMUM POSSIBLE SCORE IS 50/100 (neutral outcome - neither helped nor harmed).
 
 Score 0-50 based on:
 1. Grammar/accuracy (40% weight) - Language correctness
 2. Relevance to video (30% weight) - Context appropriateness
 3. Vocabulary/naturalness (30% weight) - General expression
 
-HARD CAP: Because no slang was used when it was available, the score CANNOT exceed 50/100 under any circumstances.
+HARD CAP: Because they didn't use any NEW slang (different from examples), the score CANNOT exceed 50/100 under any circumstances.
 
 MODIFIERS:
 - Comment is less than 5 words: Apply -10 penalty to final score
-- Mention in goodParts that they could have used slang to score higher"""
+- Mention in goodParts that they need to use different slang than the examples to score higher"""
         else:
             evaluation_criteria = """[Evaluation Criteria]
 Score 0-100 based on:
@@ -608,6 +631,7 @@ Output ONLY the username with no explanation or punctuation."""
         video_title: str,
         target_language: str,
         available_slang: List[str] = None,
+        forbidden_slang: List[str] = None,
         num_responses: int = None
     ) -> List[Dict]:
         """
@@ -621,6 +645,7 @@ Output ONLY the username with no explanation or punctuation."""
             video_title: Title of the video
             target_language: Language being learned
             available_slang: Slang terms available in the video
+            forbidden_slang: Slang from example comments (user shouldn't copy these)
             num_responses: Number of responses to generate (2-4, random if None)
 
         Returns:
@@ -629,8 +654,14 @@ Output ONLY the username with no explanation or punctuation."""
         # Detect slang usage
         if available_slang is None:
             available_slang = []
+        if forbidden_slang is None:
+            forbidden_slang = []
 
         detected_slang = self._detect_slang_in_comment(user_comment, available_slang)
+
+        # Classify slang into allowed vs forbidden
+        detected_forbidden = self._detect_slang_in_comment(user_comment, forbidden_slang)
+        allowed_slang_used = [s for s in detected_slang if s not in detected_forbidden]
 
         # Calculate response count based on score if not specified
         if num_responses is None:
@@ -654,7 +685,9 @@ Output ONLY the username with no explanation or punctuation."""
                     video_title,
                     target_language,
                     available_slang,
-                    detected_slang,
+                    allowed_slang_used,
+                    forbidden_slang,
+                    detected_forbidden,
                     response_index=i
                 )
 
@@ -698,20 +731,23 @@ Output ONLY the username with no explanation or punctuation."""
         video_title: str,
         target_language: str,
         available_slang: List[str],
-        detected_slang: List[str],
+        allowed_slang_used: List[str],
+        forbidden_slang: List[str],
+        detected_forbidden: List[str],
         response_index: int
     ) -> str:
-        """Build a natural response prompt without forced personality."""
-        
+        """Build a natural response prompt with forbidden slang awareness."""
+
         mistakes_text = "\n".join([f"- {m}" for m in mistakes]) if mistakes else "None"
-        
-        # Build minimal slang context - don't label it as "detected" or "available"
+
+        # Build slang context with forbidden slang awareness
         slang_context = ""
-        if detected_slang:
-            slang_context = f"\nSlang in their comment: {', '.join(detected_slang)}"
-        if available_slang and not detected_slang:
-            # Only show available slang if they didn't use any
-            slang_context = f"\nCommon slang for this: {', '.join(available_slang[:2])}"
+        if allowed_slang_used:
+            slang_context = f"\nThey used DIFFERENT slang (not from examples): {', '.join(allowed_slang_used)}"
+        elif detected_forbidden:
+            slang_context = f"\nThey copied slang from examples: {', '.join(detected_forbidden)} (not creative)"
+        elif forbidden_slang:
+            slang_context = f"\nThey didn't use any slang (examples had: {', '.join(forbidden_slang[:2])})"
 
         # Simple variation without personality engineering
         response_styles = [
@@ -759,6 +795,12 @@ Examples of natural responses:
 "'I learning' - bro"
 "fire comment ngl"
 "that's not how you use that slang lol"
+"respect for using different slang"
+"wait you actually used new slang?"
+"caught you copying the examples 💀"
+"bro just copied what others said"
+"at least try some different slang"
+"okay I see you getting creative with it"
 
 Just write the comment (1-2 sentences max). Nothing else."""
 
@@ -990,3 +1032,43 @@ CRITICAL JSON RULES:
 4. Keep reason to 1 sentence (e.g., "Often used with rizz in dating contexts")
 5. All strings must be wrapped in double quotes
 6. DO NOT suggest terms they've already learned"""
+
+    def text_to_speech(
+        self,
+        text: str,
+        voice: str = "Atlas-PlayAI",
+        audio_format: str = "mp3"
+    ) -> bytes:
+        """
+        Convert text to speech using Groq's PlayAI TTS model.
+
+        Args:
+            text: The text to convert to speech
+            voice: Voice to use (default: Atlas-PlayAI). Available English voices:
+                   Arista-PlayAI, Atlas-PlayAI, Basil-PlayAI, Briggs-PlayAI,
+                   Calum-PlayAI, Celeste-PlayAI, Cheyenne-PlayAI, Chip-PlayAI,
+                   Cillian-PlayAI, Deedee-PlayAI, Fritz-PlayAI, Gail-PlayAI,
+                   Indigo-PlayAI, Mamaw-PlayAI, Mason-PlayAI, Mikail-PlayAI,
+                   Mitch-PlayAI, Quinn-PlayAI, Thunder-PlayAI
+            audio_format: Output audio format (mp3, wav, flac, ogg, mulaw)
+
+        Returns:
+            Audio data as bytes
+
+        Raises:
+            Exception if TTS generation fails
+        """
+        try:
+            response = self.client.audio.speech.create(
+                model="playai-tts",
+                voice=voice,
+                input=text,
+                response_format=audio_format
+            )
+
+            # BinaryAPIResponse requires .read() method to get bytes
+            return response.read()
+
+        except Exception as e:
+            print(f"Error in text_to_speech: {e}")
+            raise Exception(f"TTS generation failed: {str(e)}")
