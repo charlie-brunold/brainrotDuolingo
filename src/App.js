@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import HomePage from './Homepage';
 import BrainrotTikTok from './Brainrottiktok.jsx';
-import RefreshSlangButton from './RefreshButton.jsx';
+///import RefreshSlangButton from './RefreshButton.jsx';
 
 function App() {
   const [showHomePage, setShowHomePage] = useState(true);
@@ -139,16 +139,8 @@ if (userConfig && !shortsData) {
         {/* Original TikTok Component */}
         <BrainrotTikTok shortsData={shortsData} />
         
-        {/* Refresh button */}
-        <RefreshSlangButton 
-          topics={userConfig?.topics || ['gaming', 'food review', 'dance']}
-          apiUrl="http://localhost:3001"
-          position="bottom-right"
-          onSuccess={(newSlang) => {
-            console.log('🎉 Discovered new slang!', newSlang);
-            // Optionally reload data here
-          }}
-        />
+        
+      
       </div>
     );
   }
