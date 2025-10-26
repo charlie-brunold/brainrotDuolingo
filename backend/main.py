@@ -371,7 +371,7 @@ def get_videos_db_get(
     return fetch_and_cache_videos(config, slang_only=slang_only, last_video_id=last_video_id)
 
 @app.post("/api/videos")
-def get_videos_db_post(config: VideoConfig, slang_only: bool = True, last_video_id: Optional[str] = None):
+def get_videos_db_post(config: VideoConfig, slang_only: bool = False, last_video_id: Optional[str] = None):
     """
     Fetches videos using a JSON Request Body (POST). Checks database cache first.
     Note: slang_only/last_video_id must be passed as query parameters if used with POST.
