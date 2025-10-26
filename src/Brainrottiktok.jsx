@@ -1,9 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Languages } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react'; 
+import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X } from 'lucide-react';
 import MySlang from './Myslang.jsx';
-import { ArrowLeft } from 'lucide-react';
-
+ 
 
 // --- SLANG TERMS (Static Data) ---
 const SLANG_TERMS = {
@@ -33,7 +31,7 @@ const SLANG_TERMS = {
   'W': { definition: 'Win, success, or something good', example: 'This is a W video' },
 };
 
-export default function BrainrotTikTok({ shortsData, onBackToHome }) {
+export default function BrainrotTikTok({ shortsData }) {
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
@@ -55,41 +53,24 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
   const [showMySlang, setShowMySlang] = useState(false); // Toggle for My Slang overlay
   const [suggestions, setSuggestions] = useState([]); // AI-suggested slang terms
   const [loadingSuggestions, setLoadingSuggestions] = useState(false); // Loading state for suggestions
-  const [isTranslating, setIsTranslating] = useState(false); // Loading state for translation
-  const [translatedText, setTranslatedText] = useState(''); // Translated text
-  const [translationAudio, setTranslationAudio] = useState(null); // Audio element for translation
-  const [showTranslation, setShowTranslation] = useState(false); // Show translated text overlay
-  const [targetLanguage, setTargetLanguage] = useState('Spanish'); // Target language for translation
-  const [translationError, setTranslationError] = useState(null); // Error message for translation
+  const [isVideoReady, setIsVideoReady] = useState(false); // Track if first video is ready
   const containerRef = useRef(null);
-  const audioRef = useRef(null); // Ref for audio element
-  const playerRef = useRef(null); // YouTube IFrame API player instance
-  const [playerReady, setPlayerReady] = useState(false); // Track if player is ready
-  const [currentAudioUrl, setCurrentAudioUrl] = useState(null); // Track blob URL for cleanup
   
   // Use provided shortsData or fallback
   const VIDEOS = shortsData || [];
   const currentVideo = VIDEOS[currentVideoIndex];
   const videoId = currentVideo?.url ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? currentVideo.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
 
-  // Load YouTube IFrame API
+  // Force first video to load properly
   useEffect(() => {
-    // Check if API is already loaded
-    if (window.YT && window.YT.Player) {
-      return;
+    if (currentVideoIndex === 0 && !isVideoReady) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        setIsVideoReady(true);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-
-    // Load the IFrame Player API code asynchronously
-    const tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    const firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-    // The API will call this function when ready
-    window.onYouTubeIframeAPIReady = () => {
-      console.log('YouTube IFrame API loaded');
-    };
-  }, []);
+  }, [currentVideoIndex, isVideoReady]);
 
 
   // --- Helper Functions ---
@@ -100,28 +81,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
     return num?.toString() || '0';
   };
 
-  // Clean up audio and blob URL to prevent memory leaks
-  const cleanupAudio = () => {
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current = null;
-      } catch (e) {
-        console.log('Error cleaning up audio:', e);
-      }
-    }
-
-    if (currentAudioUrl) {
-      try {
-        URL.revokeObjectURL(currentAudioUrl);
-        setCurrentAudioUrl(null);
-      } catch (e) {
-        console.log('Error revoking blob URL:', e);
-      }
-    }
-  };
-
   const scrollToVideo = (index) => {
     if (index >= 0 && index < VIDEOS.length) {
       setCurrentVideoIndex(index);
@@ -130,20 +89,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
       setUserComments([]);
       setComment('');
       setShowFeedback(false);
-      setTranslationError(null);
-      setShowTranslation(false);
-
-      // Clean up audio and blob URL
-      cleanupAudio();
-
-      // Unmute video if it was muted
-      if (playerRef.current && playerRef.current.unMute) {
-        try {
-          playerRef.current.unMute();
-        } catch (e) {
-          console.log('Could not unmute player:', e);
-        }
-      }
     }
   };
 
@@ -194,6 +139,13 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
 
   // --- Comment Logic ---
 
+  useEffect(() => {
+    if (currentVideo && currentVideo.unique_slang_terms) {
+      const suggestions = currentVideo.unique_slang_terms.slice(0, 3);
+      setSuggestedSlang(suggestions);
+    }
+  }, [currentVideoIndex, currentVideo]);
+
   const addSlangToComment = (slang) => {
     setComment(prev => prev + (prev ? ' ' : '') + slang + ' ');
   };
@@ -213,6 +165,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           userComment: commentText,
           targetLanguage: 'English', // TODO: Make this configurable
           videoLikeCount: currentVideo.like_count || 0,
+          availableSlang: currentVideo.unique_slang_terms || [],
         }),
       });
 
@@ -242,6 +195,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           correction: evaluation.correction || '',
           videoTitle: currentVideo.title || 'Untitled Video',
           targetLanguage: 'English', // TODO: Make this configurable
+          availableSlang: currentVideo.unique_slang_terms || [],
         }),
       });
 
@@ -408,51 +362,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
     }
   }, [showMySlang]);
 
-  // Initialize YouTube player when video changes
-  useEffect(() => {
-    if (!videoId || !window.YT || !window.YT.Player) {
-      return;
-    }
-
-    // Destroy existing player if it exists
-    if (playerRef.current && playerRef.current.destroy) {
-      try {
-        playerRef.current.destroy();
-      } catch (e) {
-        console.log('Error destroying player:', e);
-      }
-    }
-
-    // Create new player for current video
-    const playerId = `youtube-player-${currentVideoIndex}`;
-    const playerElement = document.getElementById(playerId);
-
-    if (playerElement) {
-      try {
-        playerRef.current = new window.YT.Player(playerId, {
-          videoId: videoId,
-          playerVars: {
-            autoplay: 1,
-            controls: 1,
-            rel: 0,
-            modestbranding: 1,
-          },
-          events: {
-            onReady: (event) => {
-              console.log('YouTube player ready');
-              setPlayerReady(true);
-            },
-            onError: (event) => {
-              console.log('YouTube player error:', event.data);
-            }
-          }
-        });
-      } catch (e) {
-        console.log('Error creating player:', e);
-      }
-    }
-  }, [currentVideoIndex, videoId]);
-
   const handleSubmitComment = async () => {
     if (!comment.trim() || isEvaluating) return;
 
@@ -514,168 +423,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
     }
   };
 
-  const handleTranslateVideo = async () => {
-    if (!videoId || isTranslating) return;
-
-    // Clean up any existing audio first to prevent memory leaks
-    cleanupAudio();
-
-    setIsTranslating(true);
-    setTranslationError(null); // Clear any previous errors
-
-    try {
-      const response = await fetch('http://localhost:3001/api/translate-video', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          video_id: videoId,
-          target_language: targetLanguage
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Translation failed');
-      }
-
-      const data = await response.json();
-
-      // Set translated text
-      setTranslatedText(data.translated_text);
-      setShowTranslation(true);
-
-      // Get video duration
-      let videoDuration = 0;
-      if (playerRef.current && playerRef.current.getDuration) {
-        try {
-          videoDuration = playerRef.current.getDuration();
-          console.log('Video duration:', videoDuration, 'seconds');
-        } catch (e) {
-          console.log('Could not get video duration:', e);
-        }
-      }
-
-      // Restart video and mute it BEFORE playing TTS
-      if (playerRef.current && playerRef.current.seekTo && playerRef.current.mute) {
-        try {
-          playerRef.current.seekTo(0, true); // Restart from beginning
-          playerRef.current.mute(); // Mute video audio
-          console.log('Video restarted and muted');
-        } catch (e) {
-          console.log('Could not control player:', e);
-        }
-      }
-
-      // Create audio from base64
-      const audioBlob = await fetch(`data:audio/mp3;base64,${data.audio_base64}`).then(r => r.blob());
-      const audioUrl = URL.createObjectURL(audioBlob);
-      setCurrentAudioUrl(audioUrl); // Track for cleanup
-
-      // Create audio element
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      // Metadata loading with timeout fallback
-      let metadataTimeout;
-      let metadataHandled = false;
-
-      const handleMetadataLoaded = () => {
-        if (metadataHandled) return;
-        metadataHandled = true;
-        clearTimeout(metadataTimeout);
-
-        const audioDuration = audio.duration;
-        console.log('TTS duration:', audioDuration, 'seconds');
-
-        // Calculate playback rate to match video duration
-        if (videoDuration > 0 && audioDuration > 0) {
-          // Only speed up if TTS is longer than video (never slow down)
-          if (audioDuration > videoDuration) {
-            let playbackRate = audioDuration / videoDuration;
-
-            // Cap at 2x speed (too fast becomes unintelligible)
-            playbackRate = Math.min(2.0, playbackRate);
-
-            audio.playbackRate = playbackRate;
-            console.log('TTS longer than video - applied playback rate:', playbackRate.toFixed(2) + 'x');
-          } else {
-            // TTS is shorter or equal - play at normal speed
-            audio.playbackRate = 1.0;
-            console.log('TTS shorter than video - using normal speed (1.0x)');
-          }
-        } else {
-          audio.playbackRate = 1.0;
-          console.log('Using default playback rate (1.0x)');
-        }
-
-        // Play the audio
-        audio.play().catch(err => {
-          console.error('Error playing audio:', err);
-        });
-      };
-
-      audio.addEventListener('loadedmetadata', handleMetadataLoaded);
-
-      // Fallback: play after 2 seconds even if metadata doesn't load
-      metadataTimeout = setTimeout(() => {
-        if (!metadataHandled) {
-          console.warn('Metadata timeout - playing audio with default settings');
-          handleMetadataLoaded();
-        }
-      }, 2000);
-
-      // Clean up when audio ends
-      audio.onended = () => {
-        cleanupAudio();
-        // Unmute video when TTS finishes
-        if (playerRef.current && playerRef.current.unMute) {
-          try {
-            playerRef.current.unMute();
-            console.log('Video unmuted after TTS ended');
-          } catch (e) {
-            console.log('Could not unmute player:', e);
-          }
-        }
-      };
-
-    } catch (error) {
-      console.error('Error translating video:', error);
-      setTranslationError(error.message || 'Translation unavailable. The video may not have captions.');
-
-      // Unmute video if error occurred after muting
-      if (playerRef.current && playerRef.current.unMute) {
-        try {
-          playerRef.current.unMute();
-          console.log('Video unmuted after translation error');
-        } catch (e) {
-          console.log('Could not unmute player:', e);
-        }
-      }
-    } finally {
-      setIsTranslating(false);
-    }
-  };
-
-  const handleStopTranslation = () => {
-    // Clean up audio and blob URL
-    cleanupAudio();
-
-    setShowTranslation(false);
-    setTranslatedText('');
-
-    // Unmute video when user stops translation
-    if (playerRef.current && playerRef.current.unMute) {
-      try {
-        playerRef.current.unMute();
-        console.log('Video unmuted after user stopped translation');
-      } catch (e) {
-        console.log('Could not unmute player:', e);
-      }
-    }
-  };
-
   // --- Render Logic ---
 
   if (!currentVideo) {
@@ -727,56 +474,50 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              className="absolute inset-0 overflow-hidden"
+              className="absolute inset-0"
             >
-              {/* Persistent sliding window - keeps adjacent videos mounted */}
-              {[currentVideoIndex - 1, currentVideoIndex, currentVideoIndex + 1].map((index, position) => {
-                // Skip if index is out of bounds
-                if (index < 0 || index >= VIDEOS.length) return null;
-
-                const video = VIDEOS[index];
-                const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1] : null;
-                const isCurrent = index === currentVideoIndex;
-
-                // Calculate position: previous video (-100%), current (0%), next (+100%)
-                const offsetPosition = position - 1; // -1, 0, or 1
+              {/* Render only the current video */}
+              {VIDEOS.map((video, index) => {
+                const videoIdForIndex = video?.url ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/) ? video.url.match(/(?:v=|\/shorts\/)([a-zA-Z0-9_-]{11})/)[1] : null : null;
+                const isCurrentVideo = index === currentVideoIndex;
 
                 return (
-                  <motion.div
-                    key={index}
-                    className="absolute inset-0 w-full h-full"
-                    initial={false}
-                    animate={{
-                      y: `${offsetPosition * 100}%`,
-                    }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 300,
-                      damping: 30,
-                      mass: 0.8
+                  <div
+                    key={`video-${index}-${videoIdForIndex}`}
+                    className="absolute inset-0 w-full h-full flex items-center justify-center bg-black transition-opacity duration-500"
+                    style={{
+                      opacity: isCurrentVideo ? 1 : 0,
+                      pointerEvents: isCurrentVideo ? 'auto' : 'none',
+                      zIndex: isCurrentVideo ? 1 : 0
                     }}
                   >
-                    <div className="w-full h-full flex items-center justify-center bg-black">
-                      {videoIdForIndex ? (
-                        <div
-                          key={`player-${index}`}
-                          id={`youtube-player-${index}`}
-                          className="absolute inset-0"
-                          style={{ width: '100%', height: '100%' }}
+                    {videoIdForIndex && isCurrentVideo ? (
+                      <iframe
+                        key={`iframe-${videoIdForIndex}-${currentVideoIndex}`}
+                        width="100%"
+                        height="100%"
+                        src={`https://www.youtube.com/embed/${videoIdForIndex}?autoplay=1&mute=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
+                        title={video.title}
+                        frameBorder="0"
+                        allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        className="absolute inset-0"
+                        style={{ objectFit: 'cover' }}
+                      />
+                    ) : videoIdForIndex ? (
+                      <div className="w-full h-full bg-black" />
+                    ) : (
+                      <div className="text-center text-white p-8">
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="max-w-full max-h-full rounded-lg mb-4"
                         />
-                      ) : (
-                        <div className="text-center text-white p-8">
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title}
-                            className="max-w-full max-h-full rounded-lg mb-4"
-                          />
-                          <div className="text-2xl font-bold mb-2">{video.title}</div>
-                          <div className="text-lg opacity-80">@{video.channel}</div>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
+                        <div className="text-2xl font-bold mb-2">{video.title}</div>
+                        <div className="text-lg opacity-80">@{video.channel}</div>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -790,7 +531,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
               </div>
 
         {/* Navigation Arrows */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-10" style={{ pointerEvents: 'auto' }}>
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col gap-4 z-50" style={{ pointerEvents: 'auto' }}>
         <button
             onClick={() => scrollToVideo(currentVideoIndex - 1)}
             disabled={currentVideoIndex === 0 || showComments}
@@ -823,49 +564,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
             </button>
             <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.comment_count)}</span>
           </div>
-          <div className="flex flex-col items-center gap-1 relative">
-            <button
-              onClick={showTranslation ? handleStopTranslation : handleTranslateVideo}
-              disabled={isTranslating}
-              className={`p-3 backdrop-blur-sm rounded-full transition-colors ${
-                showTranslation
-                  ? 'bg-green-500/80'
-                  : translationError
-                  ? 'bg-red-500/80'
-                  : 'bg-white/20 hover:bg-white/30'
-              } ${isTranslating ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title={showTranslation ? 'Stop Translation' : 'Translate to Spanish'}
-            >
-              {isTranslating ? (
-                <div className="w-7 h-7 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Languages className="w-7 h-7 text-white" />
-              )}
-            </button>
-            <span className="text-white text-xs font-semibold">Translate</span>
-
-            {/* Unavailable Tooltip */}
-            {translationError && (
-              <motion.div
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                className="absolute right-full mr-3 top-0 w-64 bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg p-3 border border-gray-600/50"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <div className="text-white/90 text-xs">{translationError}</div>
-                  </div>
-                  <button
-                    onClick={() => setTranslationError(null)}
-                    className="p-1 hover:bg-white/20 rounded-full transition-colors flex-shrink-0"
-                  >
-                    <X className="w-3 h-3 text-white" />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </div>
           <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
             <Share2 className="w-7 h-7 text-white" />
           </div>
@@ -879,33 +577,22 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
           <div className="text-white">
             <div className="font-bold">@{currentVideo.channel}</div>
             <div className="text-sm mt-1">{currentVideo.title}</div>
+            {currentVideo.unique_slang_terms && currentVideo.unique_slang_terms.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {currentVideo.unique_slang_terms.map((slang, idx) => (
+                  <span key={idx} className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                    #{slang}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Translation Overlay */}
-        {showTranslation && translatedText && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-30 max-h-48 overflow-y-auto"
-               style={{ pointerEvents: 'auto' }}>
-            <div className="flex items-start gap-2 mb-2">
-              <Languages className="w-5 h-5 text-green-400 flex-shrink-0 mt-1" />
-              <div className="flex-1">
-                <div className="text-green-400 font-semibold text-sm mb-1">Translation ({targetLanguage})</div>
-                <div className="text-white text-sm">{translatedText}</div>
-              </div>
-              <button
-                onClick={handleStopTranslation}
-                className="p-1 hover:bg-white/10 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Comments Section Overlay */}
         {showComments && (
-          <div
-            className="absolute inset-0 bg-black/50 z-40"
+          <div 
+            className="absolute inset-0 bg-black/50 z-30"
             onClick={() => setShowComments(false)}
             style={{ pointerEvents: 'auto' }}
           >
@@ -914,17 +601,16 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-4 border-b border-gray-700">
-                <div
+                <div 
                   className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
                   onClick={() => setShowComments(false)}
                 ></div>
-                <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.comment_count)} Comments</h3>
+                <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.slang_comment_count || 0)} Comments with Slang</h3>
               </div>
 
-
-              {/* Feedback */}
+              {/* Feedback - Sticky at top */}
               {showFeedback && feedback && (
-                <div className="p-4 bg-blue-600 border-b border-gray-700">
+                <div className="sticky top-0 z-10 p-4 bg-blue-600 border-b border-gray-700">
                   <div className="flex items-start gap-3">
                     <div className="text-3xl">
                       {feedback.score >= 80 ? '🔥' : feedback.score >= 50 ? '👍' : '📚'}
@@ -953,7 +639,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                       )}
                       {feedback.mistakes && feedback.mistakes.length > 0 && (
                         <div className="text-red-300 text-xs mb-1">
-                          ✗ Mistakes: {feedback.mistakes.join(', ')}
+                          ✗ Tips: {feedback.mistakes.join(', ')}
                         </div>
                       )}
                     </div>
@@ -963,6 +649,88 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
 
               {/* Comments List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                
+                {/* Real YouTube Comments - Show First (3-4 comments) */}
+                {currentVideo.comments_with_slang && currentVideo.comments_with_slang.slice(0, 4).map((c, idx) => {
+                  const commentId = c.comment_id;
+                  const isExplaining = activeExplanation === commentId;
+                  const isLoading = loadingExplanation === commentId;
+                  const explanation = explanations[commentId];
+
+                  return (
+                    <div key={commentId} className="relative">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="text-white font-semibold text-sm">{c.author}</div>
+                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">
+                              Real Comment
+                            </span>
+                            <button
+                              onClick={() => handleExplainClick(commentId, c.text, c.detected_slang)}
+                              disabled={isLoading}
+                              className="p-1 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-colors disabled:opacity-50"
+                              title="Explain this comment"
+                            >
+                              {isLoading ? (
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Lightbulb className="w-3 h-3 text-yellow-300" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="text-white/90 text-sm mt-1">{c.text}</div>
+
+                          {/* Tooltip/Bubble for Explanation */}
+                          {isExplaining && explanation && (
+                            <div className="mt-3 p-3 bg-gray-800 rounded-lg shadow-lg border border-gray-700 relative">
+                              <button
+                                onClick={() => setActiveExplanation(null)}
+                                className="absolute top-2 right-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
+                              >
+                                <X className="w-3 h-3 text-gray-400" />
+                              </button>
+
+                              <div className="text-white/90 text-xs mb-2">
+                                <span className="font-semibold text-blue-400">Translation:</span> {explanation.translation}
+                              </div>
+
+                              {explanation.slangBreakdown && explanation.slangBreakdown.length > 0 && (
+                                <div className="text-white/80 text-xs">
+                                  <div className="font-semibold text-purple-400 mb-1">Slang Breakdown:</div>
+                                  {explanation.slangBreakdown.map((item, i) => (
+                                    <div key={i} className="ml-2 mb-1">
+                                      <span className="text-yellow-300 font-semibold">{item.term}:</span> {item.definition}
+                                      <div className="text-gray-400 italic ml-2">"{item.usage}"</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-4 mt-2">
+                            <button className="text-gray-400 text-xs flex items-center gap-1">
+                              <Heart className="w-3 h-3" /> {c.like_count}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Divider between real and user comments */}
+                {userComments.length > 0 && currentVideo.comments_with_slang && currentVideo.comments_with_slang.length > 0 && (
+                  <div className="flex items-center gap-3 my-4">
+                    <div className="flex-1 h-px bg-gray-700"></div>
+                    <span className="text-gray-500 text-xs">Your Comments</span>
+                    <div className="flex-1 h-px bg-gray-700"></div>
+                  </div>
+                )}
+
+                {/* User Comments */}
                 {userComments.map(c => (
                   <div key={c.id} className="space-y-2">
                     <div className="flex gap-3">
@@ -1002,74 +770,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                     ))}
                   </div>
                 ))}
-                
-                {/* Show real comments from the video */}
-                {(currentVideo.top_comments || [])
-                  .filter(c => c.text && c.text.trim())  // Only filter empty comments (backend already filters for English)
-                  .slice(0, 5)
-                  .map(c => {
-                    const commentId = c.comment_id;
-                    const isExplaining = activeExplanation === commentId;
-                    const isLoading = loadingExplanation === commentId;
-                    const explanation = explanations[commentId];
-
-                  return (
-                    <div key={commentId} className="relative">
-                      <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex-shrink-0"></div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="text-white font-semibold text-sm">{c.author}</div>
-                            <button
-                              onClick={() => handleExplainClick(commentId, c.text, [])}
-                              disabled={isLoading}
-                              className="p-1 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-colors disabled:opacity-50"
-                              title="Explain this comment"
-                            >
-                              {isLoading ? (
-                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <Lightbulb className="w-3 h-3 text-yellow-300" />
-                              )}
-                            </button>
-                          </div>
-                          <div className="text-white/90 text-sm mt-1">{c.text}</div>
-
-                          {/* Tooltip/Bubble for Explanation */}
-                          {isExplaining && explanation && (
-                            <div className="mt-3 p-3 bg-gray-800 rounded-lg shadow-lg border border-gray-700 relative">
-                              <button
-                                onClick={() => setActiveExplanation(null)}
-                                className="absolute top-2 right-2 p-1 hover:bg-gray-700 rounded-full transition-colors"
-                              >
-                                <X className="w-3 h-3 text-gray-400" />
-                              </button>
-
-                              {explanation.slangBreakdown && explanation.slangBreakdown.length > 0 && (
-                                <div className="text-white/80 text-xs">
-                                  <div className="font-semibold text-purple-400 mb-1">Sentence Breakdown:</div>
-                                  {explanation.slangBreakdown.map((item, i) => (
-                                    <div key={i} className="ml-2 mb-1">
-                                      <span className="text-yellow-300 font-semibold">{item.term}:</span> {item.definition}
-                                      <div className="text-gray-400 italic ml-2">"{item.usage}"</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex gap-4 mt-2">
-                            <button className="text-gray-400 text-xs flex items-center gap-1">
-                              <Heart className="w-3 h-3" /> {c.like_count}
-                            </button>
-                            
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
 
               {/* Comment Input */}
