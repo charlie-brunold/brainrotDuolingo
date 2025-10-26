@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import HomePage from './Homepage';
 import BrainrotTikTok from './Brainrottiktok.jsx';
-///import RefreshSlangButton from './RefreshButton.jsx';
 
 function App() {
   const [showHomePage, setShowHomePage] = useState(true);
@@ -47,7 +46,8 @@ function App() {
       setUserConfig(null);
     }
   };
-   // Handle back navigation
+
+  // Handle back navigation
   const handleBackToHome = () => {
     setShowHomePage(true);
     setUserConfig(null);
@@ -60,66 +60,13 @@ function App() {
   }
 
   // Show loading screen while fetching
-if (userConfig && !shortsData) {
-  return (
-    <div className="min-h-screen w-full bg-black flex items-center justify-center p-4">
-      {/* Back button */}
-      <button
-        onClick={handleBackToHome}
-        className="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-lg transition-colors backdrop-blur-sm"
-      >
-        <svg 
-          className="w-5 h-5" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-        <span className="text-sm font-medium">Back</span>
-      </button>
-
-      <div className="text-center">
-        {/* Animated loading spinner */}
-        <div className="relative inline-block mb-6">
-          <div className="w-20 h-20 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-3xl">🎬</span>
-          </div>
-        </div>
-        
-        {/* Loading text */}
-        <h2 className="text-white text-2xl font-bold mb-3">
-          Fetching Videos...
-        </h2>
-        <p className="text-gray-400 text-sm mb-6">
-          Loading {userConfig.topics.join(', ')} videos...
-        </p>
-        
-        {/* Progress dots animation */}
-        <div className="flex justify-center gap-2">
-          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse"></div>
-          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-          <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-  // Show videos
-  if (shortsData) {
+  if (userConfig && !shortsData) {
     return (
-      <div className="relative">
-        {/* Back button */}
+      <div className="min-h-screen w-full bg-black flex items-center justify-center p-4">
+        {/* Back button - top left, aligned with header height */}
         <button
           onClick={handleBackToHome}
-          className="fixed top-4 left-4 z-50 flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-lg transition-colors backdrop-blur-sm"
+          className="fixed top-4 left-4 z-[60] flex items-center gap-2 px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-lg transition-colors backdrop-blur-sm shadow-lg border border-gray-700/50"
         >
           <svg 
             className="w-5 h-5" 
@@ -134,13 +81,64 @@ if (userConfig && !shortsData) {
               d="M15 19l-7-7 7-7"
             />
           </svg>
+          <span className="text-sm font-medium">Back</span>
+        </button>
+
+        <div className="text-center">
+          {/* Animated loading spinner */}
+          <div className="relative inline-block mb-6">
+            <div className="w-20 h-20 border-4 border-purple-600/30 border-t-purple-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-3xl">🎬</span>
+            </div>
+          </div>
+          
+          {/* Loading text */}
+          <h2 className="text-white text-2xl font-bold mb-3">
+            Fetching Videos...
+          </h2>
+          <p className="text-gray-400 text-sm mb-6">
+            Loading {userConfig.topics.join(', ')} videos...
+          </p>
+          
+          {/* Progress dots animation */}
+          <div className="flex justify-center gap-2">
+            <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse"></div>
+            <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-3 h-3 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show videos
+  if (shortsData) {
+    return (
+      <div className="relative">
+        {/* Back button - top left, vertically aligned with "For You" tab */}
+        <button
+          onClick={handleBackToHome}
+          className="fixed top-[18px] left-4 z-[60] flex items-center gap-2 px-3 py-1.5 bg-gray-800/90 hover:bg-gray-700/90 text-white rounded-lg transition-all hover:scale-105 backdrop-blur-sm shadow-lg border border-gray-700/50"
+        >
+          <svg 
+            className="w-4 h-4" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          <span className="text-sm font-medium">Back</span>
         </button>
 
         {/* Original TikTok Component */}
         <BrainrotTikTok shortsData={shortsData} />
-        
-        
-      
       </div>
     );
   }
