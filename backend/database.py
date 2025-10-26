@@ -127,34 +127,29 @@ class VideoDatabase:
                 'like_count': video[8],
                 'comment_count': video[9],
                 'url': video[10],
-                'comments_with_slang': [],
+                'top_comments': [],  # New field for non-slang system
+                'comments_with_slang': [],  # Deprecated, kept for backwards compatibility
                 'slang_comment_count': 0,
                 'unique_slang_terms': []
             }
 
-            # Fetch comments for this video one by one
-            cursor.execute('SELECT comment_id, text, author, like_count, detected_slang FROM comments WHERE video_id = ?', (video[0],))
+            # Fetch ALL comments for this video
+            cursor.execute('SELECT comment_id, text, author, like_count, author_channel_url, published_at, reply_count FROM comments WHERE video_id = ?', (video[0],))
             comments = cursor.fetchall()
 
-            comments_with_slang = []
-            all_slang = set()
-
+            top_comments = []
             for c in comments:
-                # c[4] is detected_slang (JSON string)
-                slang_list = json.loads(c[4]) if c[4] else []
-                if slang_list:  # Only include comments with slang
-                    comments_with_slang.append({
-                        'comment_id': c[0],
-                        'text': c[1],
-                        'author': c[2],
-                        'like_count': c[3],
-                        'detected_slang': slang_list
-                    })
-                    all_slang.update(slang_list)
+                top_comments.append({
+                    'comment_id': c[0],
+                    'text': c[1],
+                    'author': c[2],
+                    'like_count': c[3],
+                    'author_channel_url': c[4],
+                    'published_at': c[5],
+                    'reply_count': c[6]
+                })
 
-            video_data['comments_with_slang'] = comments_with_slang
-            video_data['slang_comment_count'] = len(comments_with_slang)
-            video_data['unique_slang_terms'] = list(all_slang)
+            video_data['top_comments'] = top_comments
 
             result.append(video_data)
 
@@ -213,11 +208,11 @@ class VideoDatabase:
                 video.get('url', '')
             ))
             
-            # 2. Insert comments
-            for comment in video.get('comments_with_slang', []):
+            # 2. Insert comments (from top_comments field)
+            for comment in video.get('top_comments', []):
                 cursor.execute('''
-                    INSERT OR REPLACE INTO comments 
-                    (comment_id, video_id, text, author, author_channel_url, 
+                    INSERT OR REPLACE INTO comments
+                    (comment_id, video_id, text, author, author_channel_url,
                      like_count, published_at, reply_count, detected_slang)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
@@ -229,7 +224,7 @@ class VideoDatabase:
                     comment.get('like_count', 0),
                     comment.get('published_at', ''),
                     comment.get('reply_count', 0),
-                    json.dumps(comment.get('detected_slang', []))
+                    json.dumps([])  # Empty array - slang detection deprecated
                 ))
         
         conn.commit()
@@ -271,33 +266,29 @@ class VideoDatabase:
                 'like_count': video[8],
                 'comment_count': video[9],
                 'url': video[10],
-                'comments_with_slang': [],
+                'top_comments': [],  # New field for non-slang system
+                'comments_with_slang': [],  # Deprecated, kept for backwards compatibility
                 'slang_comment_count': 0,
                 'unique_slang_terms': []
             }
 
-            # Fetch comments for this video
-            cursor.execute('SELECT comment_id, text, author, like_count, detected_slang FROM comments WHERE video_id = ?', (video[0],))
+            # Fetch ALL comments for this video
+            cursor.execute('SELECT comment_id, text, author, like_count, author_channel_url, published_at, reply_count FROM comments WHERE video_id = ?', (video[0],))
             comments = cursor.fetchall()
 
-            comments_with_slang = []
-            all_slang = set()
-
+            top_comments = []
             for c in comments:
-                slang_list = json.loads(c[4]) if c[4] else []
-                if slang_list:
-                    comments_with_slang.append({
-                        'comment_id': c[0],
-                        'text': c[1],
-                        'author': c[2],
-                        'like_count': c[3],
-                        'detected_slang': slang_list
-                    })
-                    all_slang.update(slang_list)
+                top_comments.append({
+                    'comment_id': c[0],
+                    'text': c[1],
+                    'author': c[2],
+                    'like_count': c[3],
+                    'author_channel_url': c[4],
+                    'published_at': c[5],
+                    'reply_count': c[6]
+                })
 
-            video_data['comments_with_slang'] = comments_with_slang
-            video_data['slang_comment_count'] = len(comments_with_slang)
-            video_data['unique_slang_terms'] = list(all_slang)
+            video_data['top_comments'] = top_comments
 
             result.append(video_data)
 

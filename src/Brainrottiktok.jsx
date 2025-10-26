@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Bookmark, ChevronUp, ChevronDown, Send, Sparkles, Lightbulb, X, Languages } from 'lucide-react';
 import MySlang from './Myslang.jsx';
 import { ArrowLeft } from 'lucide-react';
-import { franc } from 'franc-min';
 
 
 // --- SLANG TERMS (Static Data) ---
@@ -194,25 +193,6 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
   };
 
   // --- Comment Logic ---
-
-  useEffect(() => {
-    if (currentVideo && currentVideo.unique_slang_terms) {
-      // Get all slang terms from dictionary
-      const allSlangTerms = Object.keys(SLANG_TERMS);
-
-      // Filter out forbidden slang (from example comments)
-      const forbiddenSlang = currentVideo.unique_slang_terms.map(s => s.toLowerCase());
-      const allowedSlang = allSlangTerms.filter(
-        term => !forbiddenSlang.includes(term.toLowerCase())
-      );
-
-      // Randomly select 3 alternative slang terms
-      const shuffled = [...allowedSlang].sort(() => Math.random() - 0.5);
-      const suggestions = shuffled.slice(0, 3);
-
-      setSuggestedSlang(suggestions);
-    }
-  }, [currentVideoIndex, currentVideo]);
 
   const addSlangToComment = (slang) => {
     setComment(prev => prev + (prev ? ' ' : '') + slang + ' ');
@@ -934,11 +914,11 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-4 border-b border-gray-700">
-                <div 
+                <div
                   className="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 cursor-pointer"
                   onClick={() => setShowComments(false)}
                 ></div>
-                <h3 className="text-white font-bold text-lg">{formatNumber} Top Comments</h3>
+                <h3 className="text-white font-bold text-lg">{formatNumber(currentVideo.comment_count)} Comments</h3>
               </div>
 
 
@@ -1024,17 +1004,8 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                 ))}
                 
                 {/* Show real comments from the video */}
-                {(currentVideo.comments_with_slang || [])
-                  .filter(c => {
-                    const text = c.text || '';
-                    if (!text.trim()) return false;
-                
-                    // Detect language (returns ISO 639-3 code, 'eng' for English)
-                    const lang = franc(text, { minLength: 3 });
-                
-                    // Keep if English or uncertain ('und')
-                    return lang === 'eng' || lang === 'und' || text.length < 15;
-                  })
+                {(currentVideo.top_comments || [])
+                  .filter(c => c.text && c.text.trim())  // Only filter empty comments (backend already filters for English)
                   .slice(0, 5)
                   .map(c => {
                     const commentId = c.comment_id;
@@ -1050,7 +1021,7 @@ export default function BrainrotTikTok({ shortsData, onBackToHome }) {
                           <div className="flex items-center gap-2">
                             <div className="text-white font-semibold text-sm">{c.author}</div>
                             <button
-                              onClick={() => handleExplainClick(commentId, c.text, c.detected_slang)}
+                              onClick={() => handleExplainClick(commentId, c.text, [])}
                               disabled={isLoading}
                               className="p-1 bg-white/10 backdrop-blur-sm rounded-full hover:bg-white/20 transition-colors disabled:opacity-50"
                               title="Explain this comment"

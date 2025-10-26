@@ -19,7 +19,7 @@ class YouTubeShortsSlangFetcher:
         url = f"{self.base_url}/search"
         params = {
             'key': self.api_key,
-            'q': query + " #shorts", # Append #shorts for better filtering
+            'q': query, # Removed #shorts to find more videos with comments enabled
             'part': 'snippet',
             'type': 'video',
             'maxResults': max_results,
@@ -78,7 +78,11 @@ class YouTubeShortsSlangFetcher:
                 if not status.get('embeddable', False):
                     continue
 
-                # 2. Skip videos with disabled comments or very few comments
+                # 2. Skip videos made for kids (comments always disabled)
+                if status.get('madeForKids', False):
+                    continue
+
+                # 3. Skip videos with disabled comments or very few comments
                 comment_count_str = stats.get('commentCount')
                 if comment_count_str is None:
                     continue
@@ -145,7 +149,7 @@ class YouTubeShortsSlangFetcher:
             'videoId': video_id,
             'part': 'snippet',
             'maxResults': num_comments_to_fetch, # Use the random number
-            'order': 'topRated', # Sort by popularity
+            'order': 'relevance', # Changed from 'topRated' which may cause 400 errors
             'textFormat': 'plainText'
         }
 
@@ -153,12 +157,16 @@ class YouTubeShortsSlangFetcher:
             response = requests.get(url, params=params, timeout=8)
 
             if 400 <= response.status_code < 500:
+                error_msg = response.text[:200] if response.text else "No error message"
+                print(f"      ⚠️ API Error {response.status_code} for video {video_id}: {error_msg}")
                 return []
 
             response.raise_for_status()
             items = response.json().get('items', [])
+            print(f"      📥 Fetched {len(items)} comments from YouTube for video {video_id}")
 
             comments = []
+            filtered_count = 0
             for item in items:
                 top_level_comment = item.get('snippet', {}).get('topLevelComment', {})
                 if not top_level_comment: continue
@@ -180,14 +188,22 @@ class YouTubeShortsSlangFetcher:
                         'published_at': snippet.get('publishedAt', ''),
                         'reply_count': item.get('snippet', {}).get('totalReplyCount', 0)
                     })
+                else:
+                    filtered_count += 1
 
+            if filtered_count > 0:
+                print(f"      🔍 Filtered out {filtered_count} non-English comments for video {video_id}")
+            print(f"      ✅ Returning {len(comments)} English comments for video {video_id}")
             return comments
 
         except requests.exceptions.Timeout:
+             print(f"      ⚠️ Timeout fetching comments for video {video_id}")
              return []
         except requests.exceptions.RequestException as e:
+             print(f"      ❌ API error fetching comments for video {video_id}: {str(e)[:100]}")
              return []
         except Exception as e:
+             print(f"      ❌ Unexpected error fetching comments for video {video_id}: {str(e)[:100]}")
              return []
 
     def fetch_comments_parallel(self, video_ids: List[str]) -> Dict[str, List[Dict]]: # Removed max_results default
@@ -376,7 +392,8 @@ class YouTubeShortsSlangFetcher:
                 c in ' .,!?"\'()[]{}<>:;-_+=*&^%$#@~`/\n\t'
             ))
             ratio = latin_based_chars / text_length
-            return ratio > 0.8
+            # Relaxed from 0.8 to 0.6 to allow more emojis and Unicode characters
+            return ratio > 0.6
         except Exception:
             return False
 
