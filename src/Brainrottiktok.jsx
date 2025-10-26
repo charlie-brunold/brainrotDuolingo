@@ -59,6 +59,7 @@ export default function BrainrotTikTok({ shortsData }) {
   const [translationAudio, setTranslationAudio] = useState(null); // Audio element for translation
   const [showTranslation, setShowTranslation] = useState(false); // Show translated text overlay
   const [targetLanguage, setTargetLanguage] = useState('Spanish'); // Target language for translation
+  const [translationError, setTranslationError] = useState(null); // Error message for translation
   const containerRef = useRef(null);
   const audioRef = useRef(null); // Ref for audio element
   
@@ -84,6 +85,12 @@ export default function BrainrotTikTok({ shortsData }) {
       setUserComments([]);
       setComment('');
       setShowFeedback(false);
+      setTranslationError(null);
+      setShowTranslation(false);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     }
   };
 
@@ -436,6 +443,7 @@ export default function BrainrotTikTok({ shortsData }) {
     if (!videoId || isTranslating) return;
 
     setIsTranslating(true);
+    setTranslationError(null); // Clear any previous errors
 
     try {
       const response = await fetch('http://localhost:3001/api/translate-video', {
@@ -477,7 +485,7 @@ export default function BrainrotTikTok({ shortsData }) {
 
     } catch (error) {
       console.error('Error translating video:', error);
-      alert(error.message || 'Translation failed. The video may not have captions available.');
+      setTranslationError(error.message || 'Translation unavailable. The video may not have captions.');
     } finally {
       setIsTranslating(false);
     }
@@ -645,13 +653,15 @@ export default function BrainrotTikTok({ shortsData }) {
             </button>
             <span className="text-white text-xs font-semibold">{formatNumber(currentVideo.comment_count)}</span>
           </div>
-          <div className="flex flex-col items-center gap-1">
+          <div className="flex flex-col items-center gap-1 relative">
             <button
               onClick={showTranslation ? handleStopTranslation : handleTranslateVideo}
               disabled={isTranslating}
               className={`p-3 backdrop-blur-sm rounded-full transition-colors ${
                 showTranslation
                   ? 'bg-green-500/80'
+                  : translationError
+                  ? 'bg-red-500/80'
                   : 'bg-white/20 hover:bg-white/30'
               } ${isTranslating ? 'opacity-50 cursor-not-allowed' : ''}`}
               title={showTranslation ? 'Stop Translation' : 'Translate to Spanish'}
@@ -663,6 +673,28 @@ export default function BrainrotTikTok({ shortsData }) {
               )}
             </button>
             <span className="text-white text-xs font-semibold">Translate</span>
+
+            {/* Unavailable Tooltip */}
+            {translationError && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className="absolute right-full mr-3 top-0 w-64 bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg p-3 border border-gray-600/50"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <div className="text-white/90 text-xs">{translationError}</div>
+                  </div>
+                  <button
+                    onClick={() => setTranslationError(null)}
+                    className="p-1 hover:bg-white/20 rounded-full transition-colors flex-shrink-0"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
           <div className="p-3 bg-white/20 backdrop-blur-sm rounded-full">
             <Share2 className="w-7 h-7 text-white" />
