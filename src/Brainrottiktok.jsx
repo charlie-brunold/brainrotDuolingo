@@ -326,7 +326,9 @@ export default function BrainrotTikTok({ shortsData }) {
           example: slang.usage,
           learnedAt: Date.now(),
           videoTitle: currentVideo.title,
-          videoId: currentVideo.video_id
+          videoId: currentVideo.video_id,
+          videoThumbnail: currentVideo.thumbnail,
+          videoUrl: currentVideo.url
         }));
 
         setMySlang(prev => {
@@ -564,7 +566,9 @@ const handleWantToLearn = (term, definition, example) => {
     example: example,
     learnedAt: Date.now(),
     videoTitle: currentVideo.title,
-    videoId: currentVideo.video_id
+    videoId: currentVideo.video_id,
+    videoThumbnail: currentVideo.thumbnail,
+    videoUrl: currentVideo.url
   };
 
   setMySlang(prev => {
@@ -600,6 +604,21 @@ const handleAlreadyKnow = (term) => {
   if (hoverTimeoutId) {
     clearTimeout(hoverTimeoutId);
     setHoverTimeoutId(null);
+  }
+};
+
+const handleNavigateToVideo = (videoId) => {
+  // Switch to For You page
+  setShowMySlang(false);
+
+  // Find the video index by videoId
+  const videoIndex = VIDEOS.findIndex(video => video.video_id === videoId);
+
+  if (videoIndex !== -1) {
+    // Navigate to the video
+    setCurrentVideoIndex(videoIndex);
+  } else {
+    console.warn(`Video with ID ${videoId} not found in current feed`);
   }
 };
 
@@ -865,6 +884,9 @@ const handleAlreadyKnow = (term) => {
 
   // Initialize YouTube Player when video changes
   useEffect(() => {
+    // Only initialize player when on "For You" page
+    if (showMySlang) return;
+
     if (!youtubeAPIReady || !videoId) return;
 
     // Wait if a player is currently being destroyed
@@ -979,7 +1001,7 @@ const handleAlreadyKnow = (term) => {
         }
       }
     };
-  }, [youtubeAPIReady, videoId]);
+  }, [youtubeAPIReady, videoId, showMySlang]);
 
   // Clean up translation state when video changes
   useEffect(() => {
@@ -1515,6 +1537,7 @@ const handleAlreadyKnow = (term) => {
             setKnownWords={setKnownWords}
             suggestions={suggestions}
             loadingSuggestions={loadingSuggestions}
+            onNavigateToVideo={handleNavigateToVideo}
           />
         )}
       </div>
