@@ -102,7 +102,7 @@ export default function HomePage({ onStartFetching }) {
             <h1 className="text-4xl font-bold text-white">BrainThought</h1>
           </div>
           <p className="text-gray-400">
-            Select your interests to customize your language learnng experience!
+            Select your interests to customize your language learning experience!
           </p>
         </div>
 
