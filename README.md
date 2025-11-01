@@ -1,4 +1,4 @@
-# Brainrot Duolingo
+# BrainThought
 
 Learn any language by scrolling through YouTube Shorts and commenting like you're on TikTok. Watch authentic content, pick up on memes and cultural references, then practice by commenting in your target language. AI evaluates your comments instantly and gives you feedback disguised as social validation—likes, replies, and roasts that teach. Language learning that feels like scrolling, not studying.
 
